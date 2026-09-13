@@ -1,23 +1,25 @@
 /**
- * Live journey dashboard. It maps backend trace events to the visual
- * orchestration stages while keeping campaign and KPI data in sync.
+ * Live flow inspector. Subscribes to the internal trace bus over
+ * /ws/inspector and maps each entry onto the architecture diagram, the
+ * activity feed and the KPI row. Purely observability — nothing here
+ * feeds back into the delivery path.
  */
 (function () {
   'use strict';
 
   var NODE_META = {
     sdk: { label: 'Storefront SDK', icon: 'cursor' },
-    api: { label: 'API gateway', icon: 'brackets' },
+    api: { label: 'API layer', icon: 'brackets' },
     ingestion: { label: 'Event ingestion', icon: 'inbox' },
-    profile: { label: 'Profile builder', icon: 'user' },
-    realtime: { label: 'Realtime socket', icon: 'signal' },
+    profile: { label: 'Profile & segmentation', icon: 'user' },
+    realtime: { label: 'Real-time server', icon: 'signal' },
     'campaign-manager': { label: 'Campaign manager', icon: 'campaign' },
-    rules: { label: 'Audience rules', icon: 'filter' },
+    rules: { label: 'Audience & rules', icon: 'filter' },
     decision: { label: 'Decision engine', icon: 'spark' },
-    'action-sender': { label: 'Action delivery', icon: 'send' },
-    'campaigns-db': { label: 'Campaigns', icon: 'database' },
-    'profiles-db': { label: 'Profiles', icon: 'database' },
-    'analytics-db': { label: 'Analytics', icon: 'database' },
+    'action-sender': { label: 'Action sender', icon: 'send' },
+    'campaigns-db': { label: 'Campaigns DB', icon: 'database' },
+    'profiles-db': { label: 'User profiles DB', icon: 'database' },
+    'analytics-db': { label: 'Analytics DB', icon: 'database' },
   };
 
   var LAYOUT = {
@@ -38,17 +40,18 @@
     spark: '<path d="m13 2-8 11h7l-1 9 8-11h-7l1-9Z"/>',
     send: '<path d="m3 11 18-8-8 18-2-8-8-2Zm8 2 4-4"/>',
     database: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
+    cart: '<circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M3 4h2l2.4 11h10.8l2-7H6"/>',
+    star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2-5.5-2.9-5.5 2.9 1-6.2L3 9.6l6.2-.9L12 3Z"/>',
+    tag: '<path d="M20 13 13 20 4 11V4h7l9 9ZM8.5 8.5h.01"/>',
   };
 
   // Heuristic only — the trace bus carries no severity field, so a node is
-  // flagged "warn" when its own message reads like a rejection. Purely a
-  // presentation touch; nothing here feeds back into the delivery path.
+  // flagged "warn" when its own message reads like a rejection. Presentation
+  // only; nothing here feeds back into the delivery path.
   var WARN_PATTERN = /reject|declin|miss|error|fail|invalid/i;
 
   var nodes = {};
   var timers = {};
-  var recentEntries = [];
-  var refreshTimer = null;
   var logbox = document.querySelector('[data-testid="trace-log"]');
   var emptyState = document.querySelector('[data-empty-state]');
 
@@ -62,7 +65,7 @@
   }
 
   function icon(name) {
-    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>';
+    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || ICONS.spark) + '</svg>';
   }
 
   function buildDiagram() {
@@ -71,18 +74,15 @@
       LAYOUT[column].forEach(function (id) {
         var meta = NODE_META[id];
         var box = document.createElement('div');
-        box.className = 'journey-node';
+        box.className = 'node';
         box.setAttribute('data-node', id);
         box.innerHTML =
           '<div class="node__head">' +
           '<span class="status-dot"></span>' +
-          '<span class="node__label">' + spec.label + '</span>' +
+          '<span class="node__label">' + meta.label + '</span>' +
           '<span class="node__time"></span>' +
           '</div>' +
-          '<div class="node__meta"></div>';
-          '<span class="node-icon">' + icon(meta.icon) + '</span>' +
-          '<span class="node-copy"><b>' + meta.label + '</b><small class="last">Ready</small></span>' +
-          '<span class="node-state"></span>';
+          '<div class="node__meta">Ready</div>';
         host.appendChild(box);
         nodes[id] = box;
       });
@@ -94,74 +94,51 @@
     if (!box) return;
 
     var isWarn = WARN_PATTERN.test(entry.message);
-    box.classList.add('hot', 'is-hot');
+    box.classList.add('is-hot');
     box.classList.toggle('is-warn', isWarn);
     box.querySelector('.node__meta').textContent = entry.message;
     box.querySelector('.node__time').textContent = new Date(entry.at).toLocaleTimeString();
 
     clearTimeout(timers[entry.node]);
     timers[entry.node] = setTimeout(function () {
-      box.classList.remove('hot', 'is-hot', 'is-warn');
+      box.classList.remove('is-hot', 'is-warn');
     }, 900);
-    box.classList.add('is-active');
-    box.querySelector('.last').textContent = entry.message;
-
-    clearTimeout(timers[entry.node]);
-    timers[entry.node] = setTimeout(function () {
-      box.classList.remove('is-active');
-      box.classList.add('is-complete');
-    }, 850);
-    setTimeout(function () {
-      box.classList.remove('is-complete');
-    }, 4000);
   }
 
   function appendLog(entry) {
-    if (emptyState && emptyState.parentNode) emptyState.remove();
-    recentEntries.unshift(entry);
-    recentEntries = recentEntries.slice(0, 50);
+    if (emptyState && emptyState.parentNode) {
+      emptyState.remove();
+      emptyState = null;
+    }
 
-    var line = document.createElement('div');
-    var time = new Date(entry.at).toLocaleTimeString();
-    var warnClass = WARN_PATTERN.test(entry.message) ? ' warn' : '';
-    line.innerHTML =
-      '<span class="stage' + warnClass + '">[' + time + ' ' + entry.node + ']</span> ' + entry.message;
-    logbox.appendChild(line);
-    while (logbox.childElementCount > 300) logbox.removeChild(logbox.firstChild);
-    logbox.scrollTop = logbox.scrollHeight;
+    var meta = NODE_META[entry.node] || { label: entry.node };
+    var isWarn = WARN_PATTERN.test(entry.message);
     var time = new Date(entry.at).toLocaleTimeString([], {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
     });
-    var meta = NODE_META[entry.node] || { label: entry.node, icon: 'spark' };
-    line.className = 'activity-row';
-    line.innerHTML =
-      '<span class="activity-icon">' + icon(meta.icon) + '</span>' +
-      '<span class="activity-copy"><b>' + escapeHtml(meta.label) + '</b>' +
-      '<small>' + escapeHtml(entry.message) + '</small></span>' +
+
+    var row = document.createElement('div');
+    row.className = 'activity-row' + (isWarn ? ' is-warn' : '');
+    row.innerHTML =
+      '<span class="node-tag">' + escapeHtml(meta.label) + '</span>' +
+      '<span class="msg">' + escapeHtml(entry.message) + '</span>' +
       '<time>' + time + '</time>';
-    logbox.insertBefore(line, logbox.firstChild);
-    while (logbox.childElementCount > 50) logbox.removeChild(logbox.lastChild);
+
+    logbox.insertBefore(row, logbox.firstChild);
+    while (logbox.childElementCount > 60) logbox.removeChild(logbox.lastChild);
 
     var lastEvent = document.querySelector('[data-last-event]');
     if (lastEvent) lastEvent.textContent = 'Updated just now';
   }
 
   function setConnection(connected) {
-    var status = document.querySelector('[data-connection-state]');
-    if (!status) return;
-    status.classList.toggle('is-connected', connected);
-    status.innerHTML = '<i></i>' + (connected ? 'Live' : 'Reconnecting');
-  }
-
-  var wsDot = document.querySelector('[data-testid="inspector-ws-dot"]');
-  var wsLabel = document.querySelector('[data-testid="inspector-ws-label"]');
-
-  function setConnState(state) {
-    if (!wsDot || !wsLabel) return;
-    wsDot.classList.toggle('is-live', state === 'live');
-    wsLabel.textContent = state === 'live' ? 'live' : state === 'reconnecting' ? 'reconnecting…' : 'connecting…';
+    var badge = document.querySelector('[data-connection-state]');
+    var label = document.querySelector('[data-testid="inspector-ws-label"]');
+    if (!badge || !label) return;
+    badge.classList.toggle('is-connected', connected);
+    label.textContent = connected ? 'live' : 'reconnecting…';
   }
 
   function connect() {
@@ -169,7 +146,6 @@
     var socket = new WebSocket(protocol + '//' + window.location.host + '/ws/inspector');
 
     socket.addEventListener('open', function () {
-      setConnState('live');
       setConnection(true);
     });
 
@@ -177,7 +153,7 @@
       var message = JSON.parse(event.data);
 
       if (message.type === 'backlog') {
-        message.entries.slice(-12).forEach(appendLog);
+        message.entries.slice(-15).forEach(appendLog);
         return;
       }
 
@@ -189,133 +165,64 @@
     });
 
     socket.addEventListener('close', function () {
-      // The dev server restarts often; retry quietly.
-      setConnState('reconnecting');
       setConnection(false);
       setTimeout(connect, 1000);
     });
   }
 
+  var refreshTimer = null;
   function refreshPanelsSoon() {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(refreshPanels, 250);
   }
 
-  function refreshPanels() {
-    fetch('/api/v1/campaigns')
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        var host = document.querySelector('[data-testid="campaign-list"]');
-        host.innerHTML = '';
-
-        data.campaigns.forEach(function (campaign) {
-          var row = document.createElement('div');
-          row.className = 'campaign-row';
-          row.setAttribute('data-campaign-row', campaign.id);
-
-          var left = document.createElement('div');
-          left.innerHTML =
-            '<div><strong>' + campaign.name + '</strong></div>' +
-            '<div class="campaign-row__meta">on ' + campaign.trigger.event +
-            ' → [' + (campaign.audience.segments.join(', ') || 'everyone') + ']</div>';
-
-          var right = document.createElement('div');
-          right.className = 'campaign-row__right';
-          var badge = document.createElement('span');
-          badge.className = 'badge' + (campaign.status === 'active' ? ' active' : '');
-          badge.textContent = campaign.status;
-
-          var toggle = document.createElement('button');
-          toggle.className = 'btn btn--ghost btn--sm';
-          toggle.textContent = campaign.status === 'active' ? 'Pause' : 'Activate';
-          toggle.addEventListener('click', function () {
-            fetch('/api/v1/campaigns/' + campaign.id + '/status', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                status: campaign.status === 'active' ? 'paused' : 'active',
-              }),
-            }).then(refreshPanels);
-          });
-
-          right.appendChild(badge);
-          right.appendChild(toggle);
-          row.appendChild(left);
-          row.appendChild(right);
-          host.appendChild(row);
-        });
-      });
-
-    fetch('/api/v1/analytics?limit=1')
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        var byType = data.summary.byType;
-        var host = document.querySelector('[data-testid="analytics"]');
-        host.innerHTML = '';
-
-        [
-          ['events', byType.event || 0],
-          ['delivered', byType.campaign_delivered || 0],
-          ['duplicates', byType.campaign_delivered_duplicate || 0],
-        ].forEach(function (pair) {
-          var cell = document.createElement('div');
-          cell.className = 'stat';
-          cell.innerHTML = '<b>' + pair[1] + '</b><span>' + pair[0] + '</span>';
-          host.appendChild(cell);
-        });
   function campaignIcon(campaign) {
     if (campaign.trigger.event === 'add_to_cart') return 'cart';
     if (campaign.audience.segments.indexOf('vip') >= 0) return 'star';
     return 'tag';
   }
 
-  function campaignIconSvg(name) {
-    var paths = {
-      cart: '<circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M3 4h2l2.4 11h10.8l2-7H6"/>',
-      star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2-5.5-2.9-5.5 2.9 1-6.2L3 9.6l6.2-.9L12 3Z"/>',
-      tag: '<path d="M20 13 13 20 4 11V4h7l9 9ZM8.5 8.5h.01"/>',
-    };
-    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths[name] + '</svg>';
-  }
-
   function renderCampaigns(campaigns) {
     var host = document.querySelector('[data-testid="campaign-list"]');
-    var count = document.querySelector('[data-testid="campaign-count"]');
     host.innerHTML = '';
-    count.textContent = campaigns.length;
 
     campaigns.forEach(function (campaign) {
+      var segment = campaign.audience.segments.join(', ') || 'All visitors';
+      var trigger = campaign.trigger.event.replace(/_/g, ' ');
+      var isActive = campaign.status === 'active';
+
       var row = document.createElement('div');
       row.className = 'campaign-row';
       row.setAttribute('data-campaign-row', campaign.id);
-
-      var segment = campaign.audience.segments.join(', ') || 'All visitors';
-      var trigger = campaign.trigger.event.replace(/_/g, ' ');
       row.innerHTML =
-        '<span class="campaign-icon campaign-icon--' + campaignIcon(campaign) + '">' +
-        campaignIconSvg(campaignIcon(campaign)) + '</span>' +
-        '<span class="campaign-copy"><b>' + escapeHtml(campaign.name) + '</b>' +
-        '<small>When ' + escapeHtml(trigger) + ' · ' + escapeHtml(segment) + '</small></span>' +
-        '<span class="campaign-status ' + (campaign.status === 'active' ? 'is-active' : '') + '">' +
-        '<i></i>' + escapeHtml(campaign.status) + '</span>';
+        '<div>' +
+        '<div class="campaign-row__name">' + icon(campaignIcon(campaign)) + escapeHtml(campaign.name) + '</div>' +
+        '<div class="campaign-row__meta">on ' + escapeHtml(trigger) + ' → [' + escapeHtml(segment) + ']</div>' +
+        '</div>';
+
+      var right = document.createElement('div');
+      right.className = 'campaign-row__right';
+
+      var badge = document.createElement('span');
+      badge.className = 'badge' + (isActive ? ' active' : ' paused');
+      badge.textContent = campaign.status;
 
       var toggle = document.createElement('button');
-      toggle.className = 'campaign-action';
       toggle.type = 'button';
-      toggle.setAttribute('aria-label', (campaign.status === 'active' ? 'Pause ' : 'Activate ') + campaign.name);
-      toggle.textContent = campaign.status === 'active' ? 'Pause' : 'Activate';
+      toggle.className = 'btn btn--ghost btn--sm';
+      toggle.textContent = isActive ? 'Pause' : 'Activate';
       toggle.addEventListener('click', function () {
         toggle.disabled = true;
         fetch('/api/v1/campaigns/' + campaign.id + '/status', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            status: campaign.status === 'active' ? 'paused' : 'active',
-          }),
+          body: JSON.stringify({ status: isActive ? 'paused' : 'active' }),
         }).then(refreshPanels);
       });
 
-      row.appendChild(toggle);
+      right.appendChild(badge);
+      right.appendChild(toggle);
+      row.appendChild(right);
       host.appendChild(row);
     });
   }
@@ -327,9 +234,9 @@
 
   function refreshPanels() {
     Promise.all([
-      fetch('/api/v1/campaigns').then(function (response) { return response.json(); }),
-      fetch('/api/v1/analytics?limit=200').then(function (response) { return response.json(); }),
-      fetch('/api/v1/health').then(function (response) { return response.json(); }),
+      fetch('/api/v1/campaigns').then(function (r) { return r.json(); }),
+      fetch('/api/v1/analytics?limit=1').then(function (r) { return r.json(); }),
+      fetch('/api/v1/health').then(function (r) { return r.json(); }),
     ]).then(function (results) {
       var campaignData = results[0];
       var analyticsData = results[1];
@@ -344,125 +251,28 @@
       setMetric('delivered', delivered.toLocaleString());
       setMetric('profiles', healthData.profiles.toLocaleString());
       setMetric('delivery-rate', rate + '%');
-
-      var metricBar = document.querySelector('[data-metric-bar]');
-      if (metricBar) metricBar.style.width = Math.min(rate, 100) + '%';
     });
   }
 
   function showToast() {
     var toast = document.querySelector('[data-toast]');
     toast.classList.add('is-visible');
-    setTimeout(function () {
-      toast.classList.remove('is-visible');
-    }, 2600);
+    setTimeout(function () { toast.classList.remove('is-visible'); }, 2600);
   }
 
   document.querySelector('[data-testid="reset-state"]').addEventListener('click', function () {
     fetch('/api/v1/admin/reset', { method: 'POST' }).then(function () {
-      recentEntries = [];
       logbox.innerHTML =
         '<div class="activity-empty" data-empty-state>' +
         '<span><svg viewBox="0 0 24 24"><path d="M4 17h3l2-10 4 14 2-9 2 5h3"/></svg></span>' +
         '<b>Your live events will appear here</b>' +
         '<small>Open the storefront and add a product to begin.</small></div>';
       emptyState = document.querySelector('[data-empty-state]');
-      document.querySelector('[data-last-event]').textContent = 'Waiting for an event';
+      var lastEvent = document.querySelector('[data-last-event]');
+      if (lastEvent) lastEvent.textContent = 'Waiting for an event';
       showToast();
       refreshPanels();
     });
-  });
-
-  document.querySelector('.mobile-menu').addEventListener('click', function () {
-    document.body.classList.toggle('sidebar-open');
-  });
-
-  document.querySelector('[data-sidebar-close]').addEventListener('click', function () {
-    document.body.classList.remove('sidebar-open');
-  });
-
-  document.querySelectorAll('.sidebar-link').forEach(function (link) {
-    link.addEventListener('click', function () {
-      document.body.classList.remove('sidebar-open');
-    });
-  });
-
-  var commandOverlay = document.querySelector('[data-command-overlay]');
-  var commandInput = document.querySelector('[data-command-input]');
-  var commandItems = Array.from(document.querySelectorAll('[data-command-item]'));
-  var commandEmpty = document.querySelector('[data-command-empty]');
-  var visibleCommandItems = commandItems.slice();
-  var activeCommandIndex = 0;
-
-  function setActiveCommand(index) {
-    visibleCommandItems.forEach(function (item) {
-      item.classList.remove('is-selected');
-    });
-    if (!visibleCommandItems.length) return;
-    activeCommandIndex = (index + visibleCommandItems.length) % visibleCommandItems.length;
-    visibleCommandItems[activeCommandIndex].classList.add('is-selected');
-  }
-
-  function openCommand() {
-    commandOverlay.hidden = false;
-    document.body.classList.add('command-open');
-    commandInput.value = '';
-    commandItems.forEach(function (item) { item.hidden = false; });
-    visibleCommandItems = commandItems.slice();
-    commandEmpty.hidden = true;
-    setActiveCommand(0);
-    setTimeout(function () { commandInput.focus(); }, 0);
-  }
-
-  function closeCommand() {
-    commandOverlay.hidden = true;
-    document.body.classList.remove('command-open');
-  }
-
-  document.querySelector('[data-command-open]').addEventListener('click', openCommand);
-  commandOverlay.addEventListener('click', function (event) {
-    if (event.target === commandOverlay) closeCommand();
-  });
-
-  commandItems.forEach(function (item, index) {
-    item.addEventListener('mouseenter', function () {
-      var visibleIndex = visibleCommandItems.indexOf(item);
-      if (visibleIndex >= 0) setActiveCommand(visibleIndex);
-    });
-    item.addEventListener('click', closeCommand);
-  });
-
-  commandInput.addEventListener('input', function () {
-    var query = commandInput.value.trim().toLowerCase();
-    visibleCommandItems = commandItems.filter(function (item) {
-      var matches = !query || item.getAttribute('data-search').indexOf(query) >= 0;
-      item.hidden = !matches;
-      return matches;
-    });
-    commandEmpty.hidden = visibleCommandItems.length !== 0;
-    setActiveCommand(0);
-  });
-
-  document.addEventListener('keydown', function (event) {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-      event.preventDefault();
-      if (commandOverlay.hidden) openCommand();
-      else closeCommand();
-      return;
-    }
-    if (commandOverlay.hidden) return;
-    if (event.key === 'Escape') closeCommand();
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      setActiveCommand(activeCommandIndex + 1);
-    }
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setActiveCommand(activeCommandIndex - 1);
-    }
-    if (event.key === 'Enter' && visibleCommandItems[activeCommandIndex]) {
-      visibleCommandItems[activeCommandIndex].click();
-    }
   });
 
   buildDiagram();
