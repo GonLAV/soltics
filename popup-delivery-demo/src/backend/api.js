@@ -142,6 +142,7 @@ const routes = [
           decisions: r.decisions.map((d) => ({
             campaignId: d.campaignId,
             shouldTrigger: d.shouldTrigger,
+            reasonCode: d.reasonCode,
             reason: d.reason,
           })),
         })),

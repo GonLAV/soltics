@@ -114,20 +114,6 @@
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
       'stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 
-    var heading = document.createElement('p');
-    heading.className = 'popup__title';
-    heading.textContent = title;
-
-    var message2 = document.createElement('p');
-    message2.className = 'popup__message';
-    message2.textContent = body;
-    var content = document.createElement('div');
-    content.className = 'popup__content';
-
-    var eyebrow = document.createElement('p');
-    eyebrow.className = 'popup__eyebrow';
-    eyebrow.textContent = 'A little something for you';
-
     var heading = document.createElement('h2');
     heading.className = 'popup__title';
     heading.textContent = title;
@@ -136,14 +122,14 @@
     description.className = 'popup__message';
     description.textContent = body;
 
-    var actions = document.createElement('div');
-    actions.className = 'popup__actions';
-
     var close = document.createElement('button');
     close.type = 'button';
     close.className = 'btn btn--block';
     close.setAttribute('data-testid', 'popup-close');
     close.textContent = cta;
+
+    var note = document.createElement('span');
+    note.textContent = 'Applied automatically';
 
     popup.innerHTML =
       '<div class="popup__accent"></div>' +
@@ -159,18 +145,9 @@
 
     popup.insertBefore(dismiss, popup.firstChild);
     popup.querySelector('.popup__body').appendChild(heading);
-    popup.querySelector('.popup__body').appendChild(message2);
+    popup.querySelector('.popup__body').appendChild(description);
     popup.querySelector('.popup__actions').appendChild(close);
-    var note = document.createElement('span');
-    note.textContent = 'Applied automatically';
-
-    actions.appendChild(close);
-    actions.appendChild(note);
-    content.appendChild(eyebrow);
-    content.appendChild(heading);
-    content.appendChild(description);
-    content.appendChild(actions);
-    popup.appendChild(content);
+    popup.querySelector('.popup__actions').appendChild(note);
     document.body.appendChild(popup);
 
     log('sdk', 'Rendered popup for ' + campaignId, { deliveryId: deliveryId });

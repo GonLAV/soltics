@@ -107,6 +107,7 @@ test.describe('Decision engine', () => {
 
     expect(result.delivered.map((d: any) => d.campaignId)).toContain('cmp-20-off');
     expect(reasonFor(result, 'cmp-20-off').shouldTrigger).toBe(true);
+    expect(reasonFor(result, 'cmp-20-off').reasonCode).toBe('ELIGIBLE');
   });
 
   test('a non-eligible user is declined for an audience reason', async ({ request }) => {
@@ -117,6 +118,7 @@ test.describe('Decision engine', () => {
     const result = await sendEvent(request, sessionId, 'page_view');
 
     expect(result.delivered).toHaveLength(0);
+    expect(reasonFor(result, 'cmp-20-off').reasonCode).toBe('AUDIENCE_MISMATCH');
     expect(reasonFor(result, 'cmp-20-off').reason).toContain('do not match audience');
   });
 
@@ -128,6 +130,7 @@ test.describe('Decision engine', () => {
 
     const second = await sendEvent(request, sessionId, 'page_view');
     expect(second.delivered).toHaveLength(0);
+    expect(reasonFor(second, 'cmp-20-off').reasonCode).toBe('FREQUENCY_CAP');
     expect(reasonFor(second, 'cmp-20-off').reason).toContain('frequency cap');
   });
 
@@ -148,6 +151,7 @@ test.describe('Decision engine', () => {
 
     const below = await sendEvent(request, sessionId, 'add_to_cart', { price: 40 });
     expect(below.delivered).toHaveLength(0);
+    expect(reasonFor(below, 'cmp-free-shipping').reasonCode).toBe('CONDITION_FAILED');
     expect(reasonFor(below, 'cmp-free-shipping').reason).toContain('condition failed');
 
     const above = await sendEvent(request, sessionId, 'add_to_cart', { price: 75 });

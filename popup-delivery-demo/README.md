@@ -40,6 +40,26 @@ Open the inspector in one tab and the customer site in another, then click "Add 
 and watch the request walk through API → Ingestion → Profile → Rules → Decision →
 Action Sender → Real-time Server → popup.
 
+## Suggested interview walkthrough
+
+The demo is designed to communicate product quality and engineering judgment in about five
+minutes:
+
+1. Open the storefront and dashboard side by side. Explain that the browser uses REST for
+   commands and feedback, while delivery arrives asynchronously over WebSocket.
+2. Close the welcome offer, add the $40 tee, and show that the engine records
+   `CONDITION_FAILED` rather than silently doing nothing.
+3. Add the $75 hoodie. The cumulative $115 cart now qualifies, the journey nodes animate,
+   and the free-shipping action appears on the storefront.
+4. Open **Quality center** and run the audience-isolation and frequency-cap probes. These
+   use the real API and decision engine, not mocked UI results.
+5. Use **Decision observability** to show how stable reason codes identify the failing stage
+   during an incident, then connect the three architectural risks to their controls.
+
+This sequence demonstrates the core QA-manager decisions: observable outcomes rather than
+binary pass/fail, risk-based coverage, deterministic test identities, synchronous versus
+asynchronous assertions, and production-style synthetic monitoring.
+
 ## Project layout
 
 ```
@@ -83,7 +103,8 @@ popup-delivery-demo/
 3. **Event** — `POST /api/v1/events`. Ingestion validates and normalises it, writes it to
    the Analytics DB, and folds it into the profile (counters → segments).
 4. **Decision** — the Decision Engine loads active campaigns, filters by trigger event, asks
-   Audience & Rules, then applies frequency caps. Every rejection carries a reason.
+   Audience & Rules, then applies frequency caps. Every rejection carries a stable
+   `reasonCode` and a human-readable explanation.
 5. **Action** — the Action Sender stamps a `deliveryId`, pushes the instruction over the
    socket and records `campaign_delivered`.
 6. **Render** — the SDK renders one popup, then reports `popup_displayed` / `popup_closed`
