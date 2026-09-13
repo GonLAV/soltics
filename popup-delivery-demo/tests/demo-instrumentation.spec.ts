@@ -121,3 +121,69 @@ test.describe('Quality command center', () => {
     await expect(page.locator('[data-drawer-shipping]')).toContainText('unlocked');
   });
 });
+
+test.describe('Dashboard review regressions', () => {
+  test.beforeEach(async ({ request }) => {
+    const response = await request.post('/api/v1/admin/reset');
+    expect(response.ok()).toBeTruthy();
+  });
+
+  test('the dashboard keeps one row when backlog and live inspector frames repeat the same trace', async ({ page, request }) => {
+    const initResponse = await request.post('/api/v1/sdk/init', {
+      data: { userId: `trace-${Date.now()}` },
+    });
+    expect(initResponse.ok()).toBeTruthy();
+
+    const { sessionId } = await initResponse.json();
+    const eventResponse = await request.post('/api/v1/events', {
+      data: { sessionId, event: { name: 'page_view' } },
+    });
+    expect(eventResponse.status()).toBe(202);
+
+    let backlogCount = 0;
+    await page.routeWebSocket(/\/ws\/inspector(\?|$)/, (ws) => {
+      const server = ws.connectToServer();
+
+      server.onMessage((message) => {
+        ws.send(message);
+
+        const text = typeof message === 'string' ? message : message.toString();
+        const payload = JSON.parse(text);
+        if (!backlogCount && payload.type === 'backlog' && payload.entries.length) {
+          backlogCount = payload.entries.length;
+          ws.send(JSON.stringify({
+            type: 'trace',
+            entry: payload.entries[payload.entries.length - 1],
+          }));
+        }
+      });
+
+      ws.onMessage((message) => server.send(message));
+    });
+
+    await page.goto('/dashboard.html');
+
+    await expect.poll(() => backlogCount).toBeGreaterThan(0);
+    await expect(page.locator('.activity-row')).toHaveCount(Math.min(backlogCount, 12));
+  });
+
+  test('campaign controls recover after a failed status update', async ({ page }) => {
+    await page.route('**/api/v1/campaigns/*/status', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: false, error: 'status update failed' }),
+      });
+    });
+
+    await page.goto('/dashboard.html');
+
+    const toggle = page.locator('[data-campaign-row="cmp-20-off"] .campaign-action');
+    await expect(toggle).toHaveText('Pause');
+
+    await toggle.click();
+
+    await expect(toggle).toBeEnabled();
+    await expect(page.getByRole('main')).toHaveCount(1);
+  });
+});
