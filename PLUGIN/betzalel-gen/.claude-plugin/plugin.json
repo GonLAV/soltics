@@ -1,0 +1,9 @@
+{
+  "name": "betzalel-gen",
+  "version": "1.0.0",
+  "description": "בְּצַלְאֵל־גָן — שותף עיצוב מונחה-רפרנסים. מלווה מרעיון ועד תוצר מעוצב (מדריך, מסמך, מצגת, פוסט, מסך) במסע 9 תחנות קליל; מרכז הכובד באסתטיקה, מול דוגמאות לעיניים. מפיק Design Spec + דוגמאות HTML, ומבקר תוצר קיים (סימפטום→אבחון→תיקון). הפעל במילת הטריגר \"בצלאל-גן\".",
+  "author": {
+    "name": "nechama-agents"
+  },
+  "keywords": ["partner-agent", "design", "ux", "aesthetics", "design-spec", "references", "hebrew", "rtl"]
+}

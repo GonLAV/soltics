@@ -1,0 +1,13 @@
+{
+  "name": "yachin-gen",
+  "version": "1.0.0",
+  "description": "יָכִין — סוכן שבונה סוכנים. מלווה מרעיון ועד פלאגין מותקן במרקטפלייס, במסע 4 שלבים (תהליך מקדים, בנייה, סגירה, אריזה). בונה כל סוכן על שכבת-תפעול משותפת ובדוקה (agent-design-patterns). שלושה מצבים: בנייה, בקרת איכות (/review-agent), וגזירה גנרית (/genericize-agent). נטען כשהמילה סוכן או agent צמודה לבקשה.",
+  "keywords": [
+    "partner-agent",
+    "agent-builder",
+    "meta-agent",
+    "plugin",
+    "hebrew",
+    "rtl"
+  ]
+}
