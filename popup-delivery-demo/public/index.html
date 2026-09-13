@@ -95,7 +95,128 @@
           <button type="button" class="btn btn--ghost btn--sm" data-testid="reset-user">New user (clear id)</button>
         </div>
       </section>
+  <meta name="description" content="Northstar Goods storefront demo" />
+  <title>Northstar Goods | Everyday essentials</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="store-body">
+  <div class="announcement">
+    <p>Free shipping on orders over $100</p>
+    <a href="/dashboard.html">View live journey <span aria-hidden="true">→</span></a>
+  </div>
+
+  <header class="store-header">
+    <a class="store-brand" href="/" aria-label="Northstar Goods home">
+      NORTHSTAR <span>GOODS</span>
+    </a>
+    <nav class="store-nav" aria-label="Store navigation">
+      <a href="#shop">New arrivals</a>
+      <a href="#shop">Essentials</a>
+      <a href="#story">Our story</a>
+    </nav>
+    <div class="store-actions">
+      <button type="button" aria-label="Search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      </button>
+      <button type="button" aria-label="Account">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+      </button>
+      <button class="cart-button" type="button" aria-label="Open cart" aria-expanded="false" data-cart-open>
+        <svg viewBox="0 0 24 24"><path d="M5 7h14l-1 13H6L5 7Zm3 0a4 4 0 0 1 8 0"/></svg>
+        <span data-cart-count>0</span>
+      </button>
     </div>
+  </header>
+
+  <main>
+    <section class="store-hero">
+      <div class="hero-copy">
+        <span class="hero-kicker">The everyday collection · 2026</span>
+        <h1>Less noise.<br />Better essentials.</h1>
+        <p>Thoughtfully designed staples for wherever the day takes you. Built to last, made to feel effortless.</p>
+        <a class="shop-button" href="#shop">Shop the collection <svg viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a>
+      </div>
+      <div class="hero-visual" aria-label="Northstar everyday collection">
+        <div class="hero-shape hero-shape--one"></div>
+        <div class="hero-shape hero-shape--two"></div>
+        <div class="hero-product">
+          <span class="hero-product__neck"></span>
+          <span class="hero-product__body"></span>
+          <span class="hero-product__sleeve hero-product__sleeve--left"></span>
+          <span class="hero-product__sleeve hero-product__sleeve--right"></span>
+          <span class="hero-product__label">N</span>
+        </div>
+        <div class="hero-badge"><b>01</b><span>Natural<br />cotton</span></div>
+        <div class="hero-note"><span></span>Designed in Tel Aviv</div>
+      </div>
+    </section>
+
+    <section class="trust-strip" aria-label="Our values">
+      <div><svg viewBox="0 0 24 24"><path d="M12 3v18M5 7c3 0 7 2 7 5M19 7c-3 0-7 2-7 5"/></svg><span><b>Considered materials</b><small>Lower-impact fabrics</small></span></div>
+      <div><svg viewBox="0 0 24 24"><path d="m3 12 9-9 9 9-9 9-9-9Zm9-9v18M3 12h18"/></svg><span><b>Worldwide delivery</b><small>Tracked and insured</small></span></div>
+      <div><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg><span><b>Easy returns</b><small>30-day window</small></span></div>
+    </section>
+
+    <section class="collection-section" id="shop">
+      <div class="collection-heading">
+        <div><span class="section-index">01 / SHOP</span><h2>Everyday, elevated.</h2></div>
+        <p>Three essentials. Endless combinations. Each piece is made to work harder in your wardrobe.</p>
+      </div>
+      <div class="product-grid" id="products"></div>
+      <div class="cart-progress">
+        <div>
+          <span class="cart-progress__icon"><svg viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6L5 8Zm3 0a4 4 0 0 1 8 0"/></svg></span>
+          <span><b data-shipping-message>Add $100 to unlock free shipping</b><small>Your cart updates the live decision engine.</small></span>
+        </div>
+        <div class="cart-total-block"><span>Cart total</span><strong data-testid="cart-total">$0</strong></div>
+        <div class="shipping-track"><span data-shipping-track></span></div>
+      </div>
+    </section>
+
+    <section class="store-story" id="story">
+      <div class="story-art">
+        <div class="story-circle"></div>
+        <span>Form follows feeling.</span>
+      </div>
+      <div class="story-copy">
+        <span class="section-index">02 / OUR PHILOSOPHY</span>
+        <h2>Buy less.<br />Choose well.</h2>
+        <p>We design the pieces you reach for without thinking. Quietly confident, endlessly wearable, and made for real life.</p>
+        <a href="#shop">Discover our approach <span>→</span></a>
+      </div>
+    </section>
+  </main>
+
+  <button class="drawer-backdrop" type="button" aria-label="Close cart" data-cart-backdrop></button>
+  <aside class="cart-drawer" aria-label="Shopping cart" aria-hidden="true" data-cart-drawer>
+    <header class="cart-drawer__header">
+      <div><span>Your bag</span><small data-cart-heading>0 items</small></div>
+      <button type="button" aria-label="Close cart" data-cart-close>
+        <svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </header>
+    <div class="cart-drawer__shipping">
+      <div><span data-drawer-shipping>Add $100 for complimentary shipping</span><b data-drawer-percent>0%</b></div>
+      <div class="drawer-progress"><i data-drawer-progress></i></div>
+    </div>
+    <div class="cart-drawer__items" data-cart-items>
+      <div class="empty-cart">
+        <span><svg viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6L5 8Zm3 0a4 4 0 0 1 8 0"/></svg></span>
+        <h2>Your bag is ready</h2>
+        <p>Add an essential and watch the campaign engine respond in real time.</p>
+        <button type="button" data-cart-shop>Explore the collection</button>
+      </div>
+    </div>
+    <footer class="cart-drawer__footer">
+      <div class="cart-summary-row"><span>Subtotal</span><strong data-cart-subtotal>$0</strong></div>
+      <p>Taxes and shipping calculated at checkout.</p>
+      <button class="checkout-button" type="button" data-checkout disabled>
+        Continue to checkout
+        <svg viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>
+      </button>
+      <div class="secure-note"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> Secure checkout</div>
+    </footer>
+  </aside>
 
     <div class="log-console">
       <div class="log-console__head"><span class="log-console__title">Event log</span></div>
@@ -104,6 +225,35 @@
 
     <p class="footnote">Solitics real-time campaign delivery — reference demo, not a production storefront.</p>
   </div>
+  <aside class="demo-dock" aria-label="Demo controls">
+    <button class="demo-dock__toggle" type="button" data-dock-toggle aria-expanded="false">
+      <span class="pulse-icon"><i></i></span>
+      <span><b>Demo controls</b><small data-testid="sdk-ws">Connecting...</small></span>
+      <svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg>
+    </button>
+    <div class="demo-dock__panel">
+      <div class="dock-heading"><span>Customer profile</span><a href="/dashboard.html" target="_blank">Open dashboard →</a></div>
+      <dl class="profile-data">
+        <div><dt>User</dt><dd data-testid="sdk-user">—</dd></div>
+        <div><dt>Session</dt><dd data-testid="sdk-session">—</dd></div>
+        <div><dt>Segments</dt><dd data-testid="sdk-segments">—</dd></div>
+      </dl>
+      <div class="scenario-links">
+        <a href="/">Eligible</a>
+        <a href="/?testUser=non-eligible">Non-eligible</a>
+        <a href="/?testScenario=duplicate-delivery">Duplicate test</a>
+        <a href="/?testUser=vip">VIP</a>
+      </div>
+      <div class="sdk-console logbox" data-testid="sdk-log"></div>
+      <button type="button" class="new-user-button" data-testid="reset-user">Start with a new customer</button>
+    </div>
+  </aside>
+
+  <footer class="store-footer">
+    <a class="store-brand store-brand--light" href="/">NORTHSTAR <span>GOODS</span></a>
+    <p>Essentials for the everyday.</p>
+    <small>Demo storefront · Powered by Pulseboard orchestration</small>
+  </footer>
 
   <script src="theme.js"></script>
   <script src="solitics-sdk.js"></script>
@@ -112,9 +262,12 @@
       { sku: 'tee-01', name: 'Cotton T-shirt', price: 40, tint: 'linear-gradient(135deg,#5b8a86,#2f5f5b)' },
       { sku: 'hd-02', name: 'Hoodie', price: 75, tint: 'linear-gradient(135deg,#7c6bd6,#4b3a9e)' },
       { sku: 'sn-03', name: 'Sneakers', price: 120, tint: 'linear-gradient(135deg,#c98a4b,#8a5323)' },
+      { sku: 'tee-01', name: 'Essential Tee', color: 'Bone', price: 40, art: 'tee' },
+      { sku: 'hd-02', name: 'Studio Hoodie', color: 'Forest', price: 75, art: 'hoodie' },
+      { sku: 'sn-03', name: 'Daybreak Runner', color: 'Chalk / Gum', price: 120, art: 'shoe' },
     ];
 
-    var cartTotal = 0;
+    var cartItems = {};
     var container = document.getElementById('products');
     var cartTotalNote = document.querySelector('[data-testid="cart-total-note"]');
 
@@ -154,12 +307,156 @@
       body.appendChild(button);
       card.appendChild(media);
       card.appendChild(body);
+    var cartDrawer = document.querySelector('[data-cart-drawer]');
+    var cartButton = document.querySelector('[data-cart-open]');
+
+    function productArt(type) {
+      if (type === 'shoe') {
+        return '<div class="product-art product-art--shoe"><span class="shoe-upper"></span><span class="shoe-sole"></span><i></i><i></i><i></i></div>';
+      }
+      return '<div class="product-art product-art--' + type + '"><span class="garment-body"></span><span class="garment-sleeve garment-sleeve--left"></span><span class="garment-sleeve garment-sleeve--right"></span><span class="garment-neck"></span><em>N</em></div>';
+    }
+
+    function getCartState() {
+      return Object.keys(cartItems).reduce(function (state, sku) {
+        var item = cartItems[sku];
+        state.total += item.product.price * item.quantity;
+        state.count += item.quantity;
+        return state;
+      }, { total: 0, count: 0 });
+    }
+
+    function renderCartItems() {
+      var host = document.querySelector('[data-cart-items]');
+      var items = Object.keys(cartItems).map(function (sku) { return cartItems[sku]; });
+
+      if (!items.length) {
+        host.innerHTML =
+          '<div class="empty-cart">' +
+          '<span><svg viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6L5 8Zm3 0a4 4 0 0 1 8 0"/></svg></span>' +
+          '<h2>Your bag is ready</h2>' +
+          '<p>Add an essential and watch the campaign engine respond in real time.</p>' +
+          '<button type="button" data-cart-shop>Explore the collection</button></div>';
+        host.querySelector('[data-cart-shop]').addEventListener('click', closeCart);
+        return;
+      }
+
+      host.innerHTML = '';
+      items.forEach(function (item) {
+        var row = document.createElement('article');
+        row.className = 'drawer-item';
+        row.innerHTML =
+          '<div class="drawer-item__visual drawer-item__visual--' + item.product.art + '">' +
+          productArt(item.product.art) + '</div>' +
+          '<div class="drawer-item__copy"><div><h3>' + item.product.name + '</h3>' +
+          '<p>' + item.product.color + '</p></div>' +
+          '<div class="quantity-control">' +
+          '<button type="button" aria-label="Remove one ' + item.product.name + '" data-quantity-minus="' + item.product.sku + '">−</button>' +
+          '<span>' + item.quantity + '</span>' +
+          '<button type="button" aria-label="Add one ' + item.product.name + '" data-quantity-plus="' + item.product.sku + '">+</button></div></div>' +
+          '<strong>$' + (item.product.price * item.quantity) + '</strong>';
+        host.appendChild(row);
+      });
+
+      host.querySelectorAll('[data-quantity-minus]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var sku = button.getAttribute('data-quantity-minus');
+          cartItems[sku].quantity -= 1;
+          if (cartItems[sku].quantity === 0) delete cartItems[sku];
+          updateCart();
+        });
+      });
+      host.querySelectorAll('[data-quantity-plus]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          cartItems[button.getAttribute('data-quantity-plus')].quantity += 1;
+          updateCart();
+        });
+      });
+    }
+
+    function updateCart() {
+      var state = getCartState();
+      var cartTotal = state.total;
+      var cartCount = state.count;
+      document.querySelector('[data-testid="cart-total"]').textContent = '$' + cartTotal;
+      document.querySelector('[data-cart-count]').textContent = cartCount;
+      document.querySelector('[data-shipping-track]').style.width = Math.min(cartTotal, 100) + '%';
+      document.querySelector('[data-shipping-message]').textContent =
+        cartTotal >= 100 ? 'Free shipping unlocked' : 'Add $' + (100 - cartTotal) + ' to unlock free shipping';
+      document.querySelector('.cart-progress').classList.toggle('is-unlocked', cartTotal >= 100);
+      document.querySelector('[data-cart-heading]').textContent = cartCount + (cartCount === 1 ? ' item' : ' items');
+      document.querySelector('[data-cart-subtotal]').textContent = '$' + cartTotal;
+      document.querySelector('[data-drawer-progress]').style.width = Math.min(cartTotal, 100) + '%';
+      document.querySelector('[data-drawer-percent]').textContent = Math.min(cartTotal, 100) + '%';
+      document.querySelector('[data-drawer-shipping]').textContent =
+        cartTotal >= 100 ? 'Complimentary shipping unlocked' : 'Add $' + (100 - cartTotal) + ' for complimentary shipping';
+      document.querySelector('[data-checkout]').disabled = cartCount === 0;
+      renderCartItems();
+      if (cartCount > 0) {
+        cartButton.classList.remove('is-bumped');
+        requestAnimationFrame(function () { cartButton.classList.add('is-bumped'); });
+      }
+    }
+
+    function openCart() {
+      document.body.classList.add('cart-open');
+      cartDrawer.setAttribute('aria-hidden', 'false');
+      cartButton.setAttribute('aria-expanded', 'true');
+      document.querySelector('[data-cart-close]').focus();
+    }
+
+    function closeCart() {
+      document.body.classList.remove('cart-open');
+      cartDrawer.setAttribute('aria-hidden', 'true');
+      cartButton.setAttribute('aria-expanded', 'false');
+    }
+
+    PRODUCTS.forEach(function (product, index) {
+      var card = document.createElement('article');
+      card.className = 'product-card';
+      card.innerHTML =
+        '<div class="product-image product-image--' + product.art + '">' +
+        '<span class="product-number">0' + (index + 1) + '</span>' +
+        '<button class="heart-button" type="button" aria-label="Save ' + product.name + '">' +
+        '<svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg></button>' +
+        productArt(product.art) +
+        '<button class="quick-add" type="button" data-testid="add-to-cart-' + product.sku + '">Quick add <span>+</span></button></div>' +
+        '<div class="product-info"><div><h3>' + product.name + '</h3><p>' + product.color + '</p></div><strong>$' + product.price + '</strong></div>';
+
+      card.querySelector('.quick-add').addEventListener('click', function () {
+        var button = this;
+        if (!cartItems[product.sku]) cartItems[product.sku] = { product: product, quantity: 0 };
+        cartItems[product.sku].quantity += 1;
+        updateCart();
+        button.classList.add('is-added');
+        button.innerHTML = 'Added <span>✓</span>';
+        setTimeout(function () {
+          button.classList.remove('is-added');
+          button.innerHTML = 'Quick add <span>+</span>';
+        }, 1200);
+        window.Solitics.track('add_to_cart', { sku: product.sku, price: product.price });
+      });
+
       container.appendChild(card);
     });
 
     document.querySelector('[data-testid="reset-user"]').addEventListener('click', function () {
-      try { localStorage.removeItem('solitics_user_id'); } catch (e) {}
+      try { localStorage.removeItem('solitics_user_id'); } catch (error) {}
       location.href = location.pathname;
+    });
+
+    document.querySelector('[data-dock-toggle]').addEventListener('click', function () {
+      var dock = document.querySelector('.demo-dock');
+      var isOpen = dock.classList.toggle('is-open');
+      this.setAttribute('aria-expanded', String(isOpen));
+    });
+
+    cartButton.addEventListener('click', openCart);
+    document.querySelector('[data-cart-close]').addEventListener('click', closeCart);
+    document.querySelector('[data-cart-backdrop]').addEventListener('click', closeCart);
+    document.querySelector('[data-cart-shop]').addEventListener('click', closeCart);
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && document.body.classList.contains('cart-open')) closeCart();
     });
 
     document.addEventListener('solitics:ready', function (event) {
@@ -172,17 +469,20 @@
     document.addEventListener('solitics:connected', function () {
       document.querySelector('[data-testid="sdk-ws"]').textContent = 'open';
       document.querySelector('[data-testid="sdk-ws-dot"]').classList.add('is-live');
+      var state = document.querySelector('[data-testid="sdk-ws"]');
+      state.textContent = 'open';
+      state.classList.add('is-connected');
     });
 
     var logbox = document.querySelector('[data-testid="sdk-log"]');
     document.addEventListener('solitics:log', function (event) {
       var line = document.createElement('div');
-      var time = new Date(event.detail.at).toLocaleTimeString();
+      var time = new Date(event.detail.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       line.innerHTML =
-        '<span class="stage">[' + time + ' ' + event.detail.stage + ']</span> ' +
+        '<span class="stage">[' + time + ']</span> ' +
         event.detail.message;
-      logbox.appendChild(line);
-      logbox.scrollTop = logbox.scrollHeight;
+      logbox.prepend(line);
+      while (logbox.childElementCount > 20) logbox.removeChild(logbox.lastChild);
     });
 
     // Highlight the active scenario link, purely cosmetic.
@@ -194,6 +494,7 @@
         }
       });
     })();
+    updateCart();
   </script>
 </body>
 </html>
