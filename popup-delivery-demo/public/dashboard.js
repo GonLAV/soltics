@@ -1,4 +1,8 @@
 /**
+ * Live flow inspector. Subscribes to the internal trace bus over
+ * /ws/inspector and maps each entry onto the architecture diagram, the
+ * activity feed and the KPI row. Purely observability — nothing here
+ * feeds back into the delivery path.
  * Live journey dashboard. It maps backend trace events to the visual
  * orchestration stages while keeping campaign and KPI data in sync.
  */
@@ -47,6 +51,10 @@
   var refreshTimer = null;
   var logbox = document.querySelector('[data-testid="trace-log"]');
   var emptyState = document.querySelector('[data-empty-state]');
+  var overlay = document.querySelector('.flow__overlay');
+  var lastFiredNode = null;
+  var lastFiredAt = 0;
+  var STALE_GAP_MS = 1500; // a new burst after this much silence starts a fresh trail, not a jump from history
 
   function escapeHtml(value) {
     return String(value)
@@ -70,6 +78,12 @@
         box.className = 'journey-node';
         box.setAttribute('data-node', id);
         box.innerHTML =
+          '<div class="node__head">' +
+          '<span class="status-dot"></span>' +
+          '<span class="node__label">' + meta.label + '</span>' +
+          '<span class="node__time"></span>' +
+          '</div>' +
+          '<div class="node__meta">Ready</div>';
           '<span class="node-icon">' + icon(meta.icon) + '</span>' +
           '<span class="node-copy"><b>' + meta.label + '</b><small class="last">Ready</small></span>' +
           '<span class="node-state"></span>';
@@ -79,10 +93,82 @@
     });
   }
 
+  // Real coordinates of a node's center, relative to the overlay's own box —
+  // recomputed live so it stays correct across resizes and horizontal scroll.
+  function centerOf(el) {
+    var overlayRect = overlay.getBoundingClientRect();
+    var rect = el.getBoundingClientRect();
+    return {
+      x: rect.left + rect.width / 2 - overlayRect.left,
+      y: rect.top + rect.height / 2 - overlayRect.top,
+    };
+  }
+
+  // Draws one real hop: a line plus a dot that travels it, exactly the path
+  // this specific trace entry actually took through the architecture. Not a
+  // canned animation — the endpoints come from the real DOM node positions,
+  // in the real order the backend emitted them.
+  function drawTravel(fromBox, toBox) {
+    var svgns = 'http://www.w3.org/2000/svg';
+    var a = centerOf(fromBox);
+    var b = centerOf(toBox);
+
+    var group = document.createElementNS(svgns, 'g');
+
+    var line = document.createElementNS(svgns, 'line');
+    line.setAttribute('x1', a.x);
+    line.setAttribute('y1', a.y);
+    line.setAttribute('x2', b.x);
+    line.setAttribute('y2', b.y);
+    line.setAttribute('class', 'flow__line');
+    line.style.animation = 'flow-dash-move .45s linear';
+    group.appendChild(line);
+
+    var dot = document.createElementNS(svgns, 'circle');
+    dot.setAttribute('r', 4);
+    dot.setAttribute('class', 'flow__dot');
+    var motion = document.createElementNS(svgns, 'animateMotion');
+    motion.setAttribute('dur', '0.45s');
+    motion.setAttribute('fill', 'freeze');
+    motion.setAttribute('path', 'M' + a.x + ',' + a.y + ' L' + b.x + ',' + b.y);
+    dot.appendChild(motion);
+    group.appendChild(dot);
+
+    overlay.appendChild(group);
+    setTimeout(function () { line.style.opacity = '0'; }, 420);
+    setTimeout(function () { group.remove(); }, 750);
+  }
+
   function pulse(entry) {
     var box = nodes[entry.node];
     if (!box) return;
 
+    if (lastFiredNode && lastFiredNode !== box && entry.at - lastFiredAt < STALE_GAP_MS) {
+      drawTravel(lastFiredNode, box);
+    }
+    lastFiredNode = box;
+    lastFiredAt = entry.at;
+
+    var isWarn = WARN_PATTERN.test(entry.message);
+    box.classList.add('is-hot');
+    box.classList.toggle('is-warn', isWarn);
+    box.querySelector('.node__meta').textContent = entry.message;
+    box.querySelector('.node__time').textContent = new Date(entry.at).toLocaleTimeString();
+
+    clearTimeout(timers[entry.node]);
+    timers[entry.node] = setTimeout(function () {
+      box.classList.remove('is-hot', 'is-warn');
+    }, 900);
+  }
+
+  function appendLog(entry) {
+    if (emptyState && emptyState.parentNode) {
+      emptyState.remove();
+      emptyState = null;
+    }
+
+    var meta = NODE_META[entry.node] || { label: entry.node };
+    var isWarn = WARN_PATTERN.test(entry.message);
     box.classList.add('is-active');
     box.querySelector('.last').textContent = entry.message;
 
@@ -127,6 +213,34 @@
   }
 
   function setConnection(connected) {
+    var badge = document.querySelector('[data-connection-state]');
+    var label = document.querySelector('[data-testid="inspector-ws-label"]');
+    if (!badge || !label) return;
+    badge.classList.toggle('is-connected', connected);
+    label.textContent = connected ? 'live' : 'reconnecting…';
+  }
+
+  // Trace entries for one click arrive within a few milliseconds of each
+  // other (it's all synchronous on the server) — too fast to actually see as
+  // a request crossing the diagram. Replaying the queue at a fixed pace turns
+  // real backend causal order into a visible left-to-right/back-and-forth
+  // sweep, instead of one simultaneous flash.
+  var playQueue = [];
+  var playing = false;
+  var STEP_MS = 130;
+
+  function playNext() {
+    var entry = playQueue.shift();
+    if (!entry) { playing = false; return; }
+    pulse(entry);
+    appendLog(entry);
+    refreshPanelsSoon();
+    setTimeout(playNext, STEP_MS);
+  }
+
+  function enqueueTrace(entry) {
+    playQueue.push(entry);
+    if (!playing) { playing = true; playNext(); }
     var status = document.querySelector('[data-connection-state]');
     if (!status) return;
     status.classList.toggle('is-connected', connected);
@@ -145,11 +259,13 @@
       var message = JSON.parse(event.data);
 
       if (message.type === 'backlog') {
+        message.entries.slice(-15).forEach(appendLog);
         message.entries.slice(-12).forEach(appendLog);
         return;
       }
 
       if (message.type === 'trace') {
+        enqueueTrace(message.entry);
         pulse(message.entry);
         appendLog(message.entry);
         refreshPanelsSoon();
@@ -236,53 +352,6 @@
     if (element) element.textContent = value;
   }
 
-  function renderDecisionSummary(summary) {
-    var reasons = summary.byDecisionReason || {};
-    var total = Object.keys(reasons).reduce(function (sum, key) {
-      return sum + reasons[key];
-    }, 0);
-    var triggered = reasons.ELIGIBLE || 0;
-    var blocked = Math.max(total - triggered, 0);
-
-    document.querySelector('[data-decision-total]').textContent = total.toLocaleString();
-    document.querySelector('[data-decision-triggered]').textContent = triggered.toLocaleString();
-    document.querySelector('[data-decision-blocked]').textContent = blocked.toLocaleString();
-
-    var labels = {
-      ELIGIBLE: 'Qualified',
-      AUDIENCE_MISMATCH: 'Audience mismatch',
-      CONDITION_FAILED: 'Condition failed',
-      FREQUENCY_CAP: 'Frequency cap',
-      TRIGGER_MISMATCH: 'Trigger mismatch',
-      INVALID_CONDITION: 'Invalid condition',
-    };
-    var order = [
-      'ELIGIBLE',
-      'AUDIENCE_MISMATCH',
-      'CONDITION_FAILED',
-      'FREQUENCY_CAP',
-      'TRIGGER_MISMATCH',
-      'INVALID_CONDITION',
-    ];
-    var host = document.querySelector('[data-reason-list]');
-    var populated = order.filter(function (reason) { return reasons[reason]; });
-
-    if (!populated.length) {
-      host.innerHTML =
-        '<div class="reason-empty">Run a shopper journey or synthetic check to populate decision evidence.</div>';
-      return;
-    }
-
-    host.innerHTML = populated.map(function (reason) {
-      var count = reasons[reason];
-      var width = total ? Math.max(5, Math.round((count / total) * 100)) : 0;
-      return '<div class="reason-row">' +
-        '<div><span><i class="reason-dot reason-dot--' + reason.toLowerCase() + '"></i>' +
-        escapeHtml(labels[reason] || reason) + '</span><b>' + count + '</b></div>' +
-        '<div class="reason-track"><i style="width:' + width + '%"></i></div></div>';
-    }).join('');
-  }
-
   function refreshPanels() {
     return Promise.all([
       fetch('/api/v1/campaigns').then(function (response) { return response.json(); }),
@@ -302,10 +371,6 @@
       setMetric('delivered', delivered.toLocaleString());
       setMetric('profiles', healthData.profiles.toLocaleString());
       setMetric('delivery-rate', rate + '%');
-      renderDecisionSummary(analyticsData.summary);
-
-      var metricBar = document.querySelector('[data-metric-bar]');
-      if (metricBar) metricBar.style.width = Math.min(rate, 100) + '%';
     });
   }
 
