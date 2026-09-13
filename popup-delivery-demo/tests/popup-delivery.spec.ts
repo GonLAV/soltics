@@ -36,6 +36,14 @@ test.describe('Popup delivery (platform contract)', () => {
     });
   });
 
+  test('dashboard exposes the PLUGIN registry', async ({ page }) => {
+    await page.goto('/dashboard.html');
+
+    await expect(page.getByText('PLUGIN', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('plugin-list')).toContainText('alon-gen');
+    await expect(page.getByTestId('plugin-list')).toContainText('malachi-gen');
+  });
+
   // This one needs no cooperation from the backend at all: the duplicate is
   // injected in the browser by intercepting the WebSocket, forwarding it to the
   // real server and re-sending every campaign frame a second time. That makes
