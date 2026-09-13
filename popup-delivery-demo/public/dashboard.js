@@ -47,6 +47,7 @@
   var nodes = {};
   var timers = {};
   var recentEntries = [];
+  var renderedEntrySeq = {};
   var refreshTimer = null;
   var logbox = document.querySelector('[data-testid="trace-log"]');
   var emptyState = document.querySelector('[data-empty-state]');
@@ -182,6 +183,11 @@
   }
 
   function appendLog(entry) {
+    if (entry.seq != null) {
+      if (renderedEntrySeq[entry.seq]) return;
+      renderedEntrySeq[entry.seq] = true;
+    }
+
     if (emptyState && emptyState.parentNode) emptyState.remove();
     recentEntries.unshift(entry);
     recentEntries = recentEntries.slice(0, 50);
@@ -326,7 +332,14 @@
           body: JSON.stringify({
             status: campaign.status === 'active' ? 'paused' : 'active',
           }),
-        }).then(refreshPanels);
+        }).then(function (response) {
+          if (!response.ok) throw new Error('Failed to update campaign status');
+          return refreshPanels();
+        }).catch(function () {
+          return null;
+        }).then(function () {
+          toggle.disabled = false;
+        });
       });
 
       row.appendChild(toggle);
@@ -340,7 +353,7 @@
   }
 
   function refreshPanels() {
-    Promise.all([
+    return Promise.all([
       fetch('/api/v1/campaigns').then(function (response) { return response.json(); }),
       fetch('/api/v1/analytics?limit=200').then(function (response) { return response.json(); }),
       fetch('/api/v1/health').then(function (response) { return response.json(); }),
@@ -372,6 +385,7 @@
   document.querySelector('[data-testid="reset-state"]').addEventListener('click', function () {
     fetch('/api/v1/admin/reset', { method: 'POST' }).then(function () {
       recentEntries = [];
+      renderedEntrySeq = {};
       logbox.innerHTML =
         '<div class="activity-empty" data-empty-state>' +
         '<span><svg viewBox="0 0 24 24"><path d="M4 17h3l2-10 4 14 2-9 2 5h3"/></svg></span>' +
