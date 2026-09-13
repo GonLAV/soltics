@@ -40,6 +40,11 @@
     database: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
   };
 
+  // Heuristic only — the trace bus carries no severity field, so a node is
+  // flagged "warn" when its own message reads like a rejection. Purely a
+  // presentation touch; nothing here feeds back into the delivery path.
+  var WARN_PATTERN = /reject|declin|miss|error|fail|invalid/i;
+
   var nodes = {};
   var timers = {};
   var recentEntries = [];
@@ -69,6 +74,12 @@
         box.className = 'journey-node';
         box.setAttribute('data-node', id);
         box.innerHTML =
+          '<div class="node__head">' +
+          '<span class="status-dot"></span>' +
+          '<span class="node__label">' + spec.label + '</span>' +
+          '<span class="node__time"></span>' +
+          '</div>' +
+          '<div class="node__meta"></div>';
           '<span class="node-icon">' + icon(meta.icon) + '</span>' +
           '<span class="node-copy"><b>' + meta.label + '</b><small class="last">Ready</small></span>' +
           '<span class="node-state"></span>';
@@ -82,6 +93,16 @@
     var box = nodes[entry.node];
     if (!box) return;
 
+    var isWarn = WARN_PATTERN.test(entry.message);
+    box.classList.add('hot', 'is-hot');
+    box.classList.toggle('is-warn', isWarn);
+    box.querySelector('.node__meta').textContent = entry.message;
+    box.querySelector('.node__time').textContent = new Date(entry.at).toLocaleTimeString();
+
+    clearTimeout(timers[entry.node]);
+    timers[entry.node] = setTimeout(function () {
+      box.classList.remove('hot', 'is-hot', 'is-warn');
+    }, 900);
     box.classList.add('is-active');
     box.querySelector('.last').textContent = entry.message;
 
@@ -101,6 +122,13 @@
     recentEntries = recentEntries.slice(0, 50);
 
     var line = document.createElement('div');
+    var time = new Date(entry.at).toLocaleTimeString();
+    var warnClass = WARN_PATTERN.test(entry.message) ? ' warn' : '';
+    line.innerHTML =
+      '<span class="stage' + warnClass + '">[' + time + ' ' + entry.node + ']</span> ' + entry.message;
+    logbox.appendChild(line);
+    while (logbox.childElementCount > 300) logbox.removeChild(logbox.firstChild);
+    logbox.scrollTop = logbox.scrollHeight;
     var time = new Date(entry.at).toLocaleTimeString([], {
       hour: '2-digit',
       minute: '2-digit',
@@ -127,11 +155,21 @@
     status.innerHTML = '<i></i>' + (connected ? 'Live' : 'Reconnecting');
   }
 
+  var wsDot = document.querySelector('[data-testid="inspector-ws-dot"]');
+  var wsLabel = document.querySelector('[data-testid="inspector-ws-label"]');
+
+  function setConnState(state) {
+    if (!wsDot || !wsLabel) return;
+    wsDot.classList.toggle('is-live', state === 'live');
+    wsLabel.textContent = state === 'live' ? 'live' : state === 'reconnecting' ? 'reconnecting…' : 'connecting…';
+  }
+
   function connect() {
     var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     var socket = new WebSocket(protocol + '//' + window.location.host + '/ws/inspector');
 
     socket.addEventListener('open', function () {
+      setConnState('live');
       setConnection(true);
     });
 
@@ -151,6 +189,8 @@
     });
 
     socket.addEventListener('close', function () {
+      // The dev server restarts often; retry quietly.
+      setConnState('reconnecting');
       setConnection(false);
       setTimeout(connect, 1000);
     });
@@ -161,6 +201,68 @@
     refreshTimer = setTimeout(refreshPanels, 250);
   }
 
+  function refreshPanels() {
+    fetch('/api/v1/campaigns')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var host = document.querySelector('[data-testid="campaign-list"]');
+        host.innerHTML = '';
+
+        data.campaigns.forEach(function (campaign) {
+          var row = document.createElement('div');
+          row.className = 'campaign-row';
+          row.setAttribute('data-campaign-row', campaign.id);
+
+          var left = document.createElement('div');
+          left.innerHTML =
+            '<div><strong>' + campaign.name + '</strong></div>' +
+            '<div class="campaign-row__meta">on ' + campaign.trigger.event +
+            ' → [' + (campaign.audience.segments.join(', ') || 'everyone') + ']</div>';
+
+          var right = document.createElement('div');
+          right.className = 'campaign-row__right';
+          var badge = document.createElement('span');
+          badge.className = 'badge' + (campaign.status === 'active' ? ' active' : '');
+          badge.textContent = campaign.status;
+
+          var toggle = document.createElement('button');
+          toggle.className = 'btn btn--ghost btn--sm';
+          toggle.textContent = campaign.status === 'active' ? 'Pause' : 'Activate';
+          toggle.addEventListener('click', function () {
+            fetch('/api/v1/campaigns/' + campaign.id + '/status', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                status: campaign.status === 'active' ? 'paused' : 'active',
+              }),
+            }).then(refreshPanels);
+          });
+
+          right.appendChild(badge);
+          right.appendChild(toggle);
+          row.appendChild(left);
+          row.appendChild(right);
+          host.appendChild(row);
+        });
+      });
+
+    fetch('/api/v1/analytics?limit=1')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var byType = data.summary.byType;
+        var host = document.querySelector('[data-testid="analytics"]');
+        host.innerHTML = '';
+
+        [
+          ['events', byType.event || 0],
+          ['delivered', byType.campaign_delivered || 0],
+          ['duplicates', byType.campaign_delivered_duplicate || 0],
+        ].forEach(function (pair) {
+          var cell = document.createElement('div');
+          cell.className = 'stat';
+          cell.innerHTML = '<b>' + pair[1] + '</b><span>' + pair[0] + '</span>';
+          host.appendChild(cell);
+        });
   function campaignIcon(campaign) {
     if (campaign.trigger.event === 'add_to_cart') return 'cart';
     if (campaign.audience.segments.indexOf('vip') >= 0) return 'star';

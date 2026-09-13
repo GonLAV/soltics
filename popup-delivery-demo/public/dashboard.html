@@ -7,6 +7,48 @@
   <title>Live journey | Pulseboard</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
+<body>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <a class="brand" href="/dashboard.html"><span class="brand__mark">N</span>Flow Inspector</a>
+      <nav class="topbar__nav">
+        <a href="/">← Customer site</a>
+        <a href="/dashboard.html" class="is-current">Flow inspector</a>
+      </nav>
+      <div class="topbar__actions">
+        <span class="conn-badge"><span class="status-dot" data-testid="inspector-ws-dot"></span><span data-testid="inspector-ws-label">connecting…</span></span>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle theme">
+          <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+          <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <section class="hero" style="padding-bottom: 6px;">
+      <div class="hero__copy">
+        <p class="eyebrow">Live observability</p>
+        <h1>Watch a request cross the whole architecture</h1>
+        <p class="lede">
+          Open the <a href="/" target="_blank" style="color:var(--brand); font-weight:600;">customer website</a>
+          in another tab and click "Add to cart" — every hop below lights up as it happens.
+        </p>
+      </div>
+      <button type="button" class="btn btn--ghost" data-testid="reset-state">Reset backend state</button>
+    </section>
+
+    <div class="legend">
+      <span><span class="status-dot"></span> Idle</span>
+      <span><span class="status-dot is-live"></span> Active / healthy</span>
+      <span><span class="status-dot" style="background:var(--warn)"></span> Rejected / declined</span>
+    </div>
+
+    <div class="flow">
+      <div class="flow__col" data-col="client"><h3>Client Browser</h3></div>
+      <div class="flow__col" data-col="backend"><h3>Solitics Backend</h3></div>
+      <div class="flow__col" data-col="engine"><h3>Campaign Engine</h3></div>
+      <div class="flow__col" data-col="stores"><h3>Data Stores</h3></div>
 <body class="admin-body">
   <aside class="admin-sidebar" aria-label="Primary navigation">
     <a class="brand-lockup" href="/dashboard.html" aria-label="Pulseboard home">
@@ -102,6 +144,14 @@
         </div>
       </div>
 
+    <div class="grid-2">
+      <section class="card">
+        <div class="section-head"><h2>Campaigns</h2><span class="hint">click to pause / activate</span></div>
+        <div data-testid="campaign-list"></div>
+      </section>
+      <section class="card">
+        <div class="section-head"><h2>Analytics</h2><span class="hint">since last reset</span></div>
+        <div class="stat-row" data-testid="analytics"></div>
       <section class="kpi-grid" aria-label="Performance summary" id="analytics">
         <article class="kpi-card">
           <div class="kpi-label">Events processed <span class="help-icon">?</span></div>
@@ -244,11 +294,16 @@
     </section>
   </div>
 
+    <div class="log-console">
+      <div class="log-console__head"><span class="log-console__title">Trace log</span></div>
+      <div class="log-console__body" data-testid="trace-log"></div>
+    </div>
   <div class="toast" role="status" aria-live="polite" data-toast>
     <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>
     Demo data reset
   </div>
 
+  <script src="theme.js"></script>
   <script src="dashboard.js"></script>
 </body>
 </html>
