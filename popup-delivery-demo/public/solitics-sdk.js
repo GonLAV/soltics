@@ -106,17 +106,39 @@
     popup.setAttribute('data-campaign-id', campaignId || '');
     popup.setAttribute('data-delivery-id', deliveryId || '');
 
-    var heading = document.createElement('p');
-    heading.className = 'popup__text';
-    heading.textContent = title + ' ' + body;
+    var content = document.createElement('div');
+    content.className = 'popup__content';
+
+    var eyebrow = document.createElement('p');
+    eyebrow.className = 'popup__eyebrow';
+    eyebrow.textContent = 'A little something for you';
+
+    var heading = document.createElement('h2');
+    heading.className = 'popup__title';
+    heading.textContent = title;
+
+    var description = document.createElement('p');
+    description.className = 'popup__message';
+    description.textContent = body;
+
+    var actions = document.createElement('div');
+    actions.className = 'popup__actions';
 
     var close = document.createElement('button');
     close.type = 'button';
     close.setAttribute('data-testid', 'popup-close');
     close.textContent = cta;
 
-    popup.appendChild(heading);
-    popup.appendChild(close);
+    var note = document.createElement('span');
+    note.textContent = 'Applied automatically';
+
+    actions.appendChild(close);
+    actions.appendChild(note);
+    content.appendChild(eyebrow);
+    content.appendChild(heading);
+    content.appendChild(description);
+    content.appendChild(actions);
+    popup.appendChild(content);
     document.body.appendChild(popup);
 
     log('sdk', 'Rendered popup for ' + campaignId, { deliveryId: deliveryId });
