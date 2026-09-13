@@ -354,6 +354,101 @@ button.ghost:hover {
 .footer a:hover { color: #d0d0d0; }
 
 /* ================================================================
+   Dashboard — WS status indicator
+   ================================================================ */
+
+.ws-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .78rem;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.ws-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d1d3d5;
+  transition: background .2s ease;
+}
+
+.ws-status__dot--live {
+  background: var(--green-btn);
+  box-shadow: 0 0 0 3px rgba(0, 128, 96, 0.15);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(0, 128, 96, 0.15); }
+  50% { box-shadow: 0 0 0 5px rgba(0, 128, 96, 0.08); }
+}
+
+/* ================================================================
+   Dashboard — scenario triggers
+   ================================================================ */
+
+.scenarios {
+  margin-bottom: 24px;
+}
+
+.scenarios__label {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.scenarios__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.scenario-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card-muted);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: .84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+
+.scenario-btn:hover {
+  border-color: var(--green);
+  background: #f5fae8;
+  color: var(--green-btn);
+  box-shadow: none;
+}
+
+.scenario-btn__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.scenario-btn:hover .scenario-btn__icon {
+  background: var(--green-btn);
+}
+
+/* ================================================================
    Dashboard — flow diagram
    ================================================================ */
 
@@ -362,6 +457,7 @@ button.ghost:hover {
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
   margin-bottom: 24px;
+  position: relative;
 }
 
 @media (max-width: 860px) {
@@ -388,15 +484,43 @@ button.ghost:hover {
   transition: all .2s ease;
 }
 
+.node__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .node .label {
   font-weight: 600;
   color: var(--ink);
 }
 
+.node__count {
+  flex-shrink: 0;
+  font-size: .66rem;
+  font-weight: 700;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--card-muted);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .2s ease;
+}
+
+.node.hot .node__count {
+  background: var(--green);
+  color: #fff;
+}
+
 .node .last {
   color: var(--muted);
   font-size: .72rem;
-  margin-top: 3px;
+  margin-top: 4px;
   min-height: 1em;
   line-height: 1.4;
 }
@@ -405,12 +529,125 @@ button.ghost:hover {
   border-color: var(--green);
   background: #f5fae8;
   box-shadow: 0 0 0 3px rgba(149, 191, 71, 0.15);
+  transform: scale(1.02);
 }
 
 .col--client .node.hot {
   border-color: var(--accent);
   background: #f3effd;
   box-shadow: 0 0 0 3px rgba(107, 79, 216, 0.12);
+}
+
+.col--client .node.hot .node__count {
+  background: var(--accent);
+}
+
+/* ================================================================
+   Dashboard — decision detail
+   ================================================================ */
+
+.decision-empty {
+  color: var(--muted);
+  font-size: .84rem;
+  padding: 8px 0;
+}
+
+.decision-event {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.decision-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: .82rem;
+}
+
+.decision-row:last-child { border-bottom: none; }
+
+.decision-row__status {
+  flex-shrink: 0;
+  font-size: .66rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-top: 1px;
+}
+
+.decision-row--triggered .decision-row__status {
+  background: #e6f5ee;
+  color: var(--green-btn);
+}
+
+.decision-row--skipped .decision-row__status {
+  background: #fce8ea;
+  color: #c5353f;
+}
+
+.decision-row__name {
+  font-weight: 600;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+
+.decision-row__reason {
+  color: var(--muted);
+  font-size: .78rem;
+  line-height: 1.4;
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+/* ================================================================
+   Dashboard — reason distribution
+   ================================================================ */
+
+.reason-bar {
+  margin-bottom: 12px;
+}
+
+.reason-bar__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: .78rem;
+  color: var(--ink-secondary);
+  margin-bottom: 4px;
+}
+
+.reason-bar__count {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.reason-bar__track {
+  height: 6px;
+  background: var(--card-muted);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.reason-bar__fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width .4s ease;
+}
+
+.reason-total {
+  font-size: .72rem;
+  color: var(--muted);
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
 }
 
 /* ================================================================
@@ -458,10 +695,16 @@ button.ghost:hover {
 
 .stats {
   display: flex;
-  gap: 24px;
+  gap: 20px;
   flex-wrap: wrap;
   font-size: .82rem;
   color: var(--muted);
+}
+
+.stat-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .stats b {
