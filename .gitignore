@@ -12,3 +12,9 @@ PLUGIN/
 !.claude/agents/
 .claude/agents/*
 !.claude/agents/nadav-review.md
+
+# Personal to this application — kept local while the repository is public.
+# INTERVIEW-PREP.md is interview preparation; the .docx files are Solitics'
+# own home assignment and the answers to it. Neither should be indexable.
+popup-delivery-demo/INTERVIEW-PREP.md
+*.docx
