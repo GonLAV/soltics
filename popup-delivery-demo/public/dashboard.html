@@ -5,65 +5,69 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Flow Inspector — Solitics Campaign Demo</title>
   <link rel="stylesheet" href="styles.css" />
-  <style>
-    .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
-    @media (max-width: 860px) { .flow { grid-template-columns: repeat(2, 1fr); } }
-    .col h3 {
-      font-size: .7rem; text-transform: uppercase; letter-spacing: .07em;
-      color: var(--muted); margin: 0 0 8px; text-align: center;
-    }
-    .node {
-      background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-      padding: 9px 11px; margin-bottom: 8px; font-size: .8rem; transition: all .18s ease;
-    }
-    .node .label { font-weight: 600; }
-    .node .last { color: var(--muted); font-size: .72rem; margin-top: 2px; min-height: 1em; }
-    .node.hot { border-color: var(--brand); background: #e9f6f4; box-shadow: 0 0 0 3px rgba(14,124,116,.12); }
-    .col--client .node.hot { border-color: var(--accent); background: #f0ecfd; box-shadow: 0 0 0 3px rgba(107,79,216,.12); }
-    .campaign { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: .82rem; }
-    .campaign:last-child { border-bottom: none; }
-    .badge { font-size: .68rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
-    .badge.active { color: var(--brand); border-color: var(--brand); }
-    .stats { display: flex; gap: 18px; flex-wrap: wrap; font-size: .82rem; }
-    .stats b { display: block; font-size: 1.3rem; }
-  </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>Flow Inspector</h1>
-      <p class="sub">
-        Live trace of every hop. Open the
-        <a href="/" target="_blank">customer website</a> in another tab and watch the boxes fire.
-      </p>
-    </header>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <a class="brand" href="/dashboard.html"><span class="brand__mark">N</span>Flow Inspector</a>
+      <nav class="topbar__nav">
+        <a href="/">← Customer site</a>
+        <a href="/dashboard.html" class="is-current">Flow inspector</a>
+      </nav>
+      <div class="topbar__actions">
+        <span class="conn-badge"><span class="status-dot" data-testid="inspector-ws-dot"></span><span data-testid="inspector-ws-label">connecting…</span></span>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle theme">
+          <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+          <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
 
-    <nav class="nav">
-      <a href="/">← customer website</a>
-      <a href="#" data-testid="reset-state">reset backend state</a>
-    </nav>
+  <div class="container">
+    <section class="hero" style="padding-bottom: 6px;">
+      <div class="hero__copy">
+        <p class="eyebrow">Live observability</p>
+        <h1>Watch a request cross the whole architecture</h1>
+        <p class="lede">
+          Open the <a href="/" target="_blank" style="color:var(--brand); font-weight:600;">customer website</a>
+          in another tab and click "Add to cart" — every hop below lights up as it happens.
+        </p>
+      </div>
+      <button type="button" class="btn btn--ghost" data-testid="reset-state">Reset backend state</button>
+    </section>
+
+    <div class="legend">
+      <span><span class="status-dot"></span> Idle</span>
+      <span><span class="status-dot is-live"></span> Active / healthy</span>
+      <span><span class="status-dot" style="background:var(--warn)"></span> Rejected / declined</span>
+    </div>
 
     <div class="flow">
-      <div class="col col--client" data-col="client"><h3>Client Browser</h3></div>
-      <div class="col" data-col="backend"><h3>Solitics Backend</h3></div>
-      <div class="col" data-col="engine"><h3>Campaign Engine</h3></div>
-      <div class="col" data-col="stores"><h3>Data Stores</h3></div>
+      <div class="flow__col" data-col="client"><h3>Client Browser</h3></div>
+      <div class="flow__col" data-col="backend"><h3>Solitics Backend</h3></div>
+      <div class="flow__col" data-col="engine"><h3>Campaign Engine</h3></div>
+      <div class="flow__col" data-col="stores"><h3>Data Stores</h3></div>
     </div>
 
-    <div class="grid">
-      <section class="panel">
-        <h2>Campaigns</h2>
+    <div class="grid-2">
+      <section class="card">
+        <div class="section-head"><h2>Campaigns</h2><span class="hint">click to pause / activate</span></div>
         <div data-testid="campaign-list"></div>
       </section>
-      <section class="panel">
-        <h2>Analytics</h2>
-        <div class="stats" data-testid="analytics"></div>
+      <section class="card">
+        <div class="section-head"><h2>Analytics</h2><span class="hint">since last reset</span></div>
+        <div class="stat-row" data-testid="analytics"></div>
       </section>
     </div>
 
-    <div class="logbox" data-testid="trace-log"></div>
+    <div class="log-console">
+      <div class="log-console__head"><span class="log-console__title">Trace log</span></div>
+      <div class="log-console__body" data-testid="trace-log"></div>
+    </div>
   </div>
 
+  <script src="theme.js"></script>
   <script src="dashboard.js"></script>
 </body>
 </html>

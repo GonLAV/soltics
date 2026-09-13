@@ -26,6 +26,11 @@
     ],
   };
 
+  // Heuristic only — the trace bus carries no severity field, so a node is
+  // flagged "warn" when its own message reads like a rejection. Purely a
+  // presentation touch; nothing here feeds back into the delivery path.
+  var WARN_PATTERN = /reject|declin|miss|error|fail|invalid/i;
+
   var nodes = {};
   var timers = {};
 
@@ -37,7 +42,12 @@
         box.className = 'node';
         box.setAttribute('data-node', spec.id);
         box.innerHTML =
-          '<div class="label">' + spec.label + '</div><div class="last"></div>';
+          '<div class="node__head">' +
+          '<span class="status-dot"></span>' +
+          '<span class="node__label">' + spec.label + '</span>' +
+          '<span class="node__time"></span>' +
+          '</div>' +
+          '<div class="node__meta"></div>';
         host.appendChild(box);
         nodes[spec.id] = box;
       });
@@ -48,12 +58,15 @@
     var box = nodes[entry.node];
     if (!box) return;
 
-    box.classList.add('hot');
-    box.querySelector('.last').textContent = entry.message;
+    var isWarn = WARN_PATTERN.test(entry.message);
+    box.classList.add('hot', 'is-hot');
+    box.classList.toggle('is-warn', isWarn);
+    box.querySelector('.node__meta').textContent = entry.message;
+    box.querySelector('.node__time').textContent = new Date(entry.at).toLocaleTimeString();
 
     clearTimeout(timers[entry.node]);
     timers[entry.node] = setTimeout(function () {
-      box.classList.remove('hot');
+      box.classList.remove('hot', 'is-hot', 'is-warn');
     }, 900);
   }
 
@@ -62,16 +75,30 @@
   function appendLog(entry) {
     var line = document.createElement('div');
     var time = new Date(entry.at).toLocaleTimeString();
+    var warnClass = WARN_PATTERN.test(entry.message) ? ' warn' : '';
     line.innerHTML =
-      '<span class="stage">[' + time + ' ' + entry.node + ']</span> ' + entry.message;
+      '<span class="stage' + warnClass + '">[' + time + ' ' + entry.node + ']</span> ' + entry.message;
     logbox.appendChild(line);
     while (logbox.childElementCount > 300) logbox.removeChild(logbox.firstChild);
     logbox.scrollTop = logbox.scrollHeight;
   }
 
+  var wsDot = document.querySelector('[data-testid="inspector-ws-dot"]');
+  var wsLabel = document.querySelector('[data-testid="inspector-ws-label"]');
+
+  function setConnState(state) {
+    if (!wsDot || !wsLabel) return;
+    wsDot.classList.toggle('is-live', state === 'live');
+    wsLabel.textContent = state === 'live' ? 'live' : state === 'reconnecting' ? 'reconnecting…' : 'connecting…';
+  }
+
   function connect() {
     var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     var socket = new WebSocket(protocol + '//' + window.location.host + '/ws/inspector');
+
+    socket.addEventListener('open', function () {
+      setConnState('live');
+    });
 
     socket.addEventListener('message', function (event) {
       var message = JSON.parse(event.data);
@@ -90,6 +117,7 @@
 
     socket.addEventListener('close', function () {
       // The dev server restarts often; retry quietly.
+      setConnState('reconnecting');
       setTimeout(connect, 1000);
     });
   }
@@ -112,23 +140,23 @@
 
         data.campaigns.forEach(function (campaign) {
           var row = document.createElement('div');
-          row.className = 'campaign';
+          row.className = 'campaign-row';
           row.setAttribute('data-campaign-row', campaign.id);
 
           var left = document.createElement('div');
           left.innerHTML =
             '<div><strong>' + campaign.name + '</strong></div>' +
-            '<div class="price">on ' + campaign.trigger.event +
+            '<div class="campaign-row__meta">on ' + campaign.trigger.event +
             ' → [' + (campaign.audience.segments.join(', ') || 'everyone') + ']</div>';
 
           var right = document.createElement('div');
+          right.className = 'campaign-row__right';
           var badge = document.createElement('span');
           badge.className = 'badge' + (campaign.status === 'active' ? ' active' : '');
           badge.textContent = campaign.status;
 
           var toggle = document.createElement('button');
-          toggle.className = 'ghost';
-          toggle.style.marginLeft = '8px';
+          toggle.className = 'btn btn--ghost btn--sm';
           toggle.textContent = campaign.status === 'active' ? 'Pause' : 'Activate';
           toggle.addEventListener('click', function () {
             fetch('/api/v1/campaigns/' + campaign.id + '/status', {
@@ -161,7 +189,8 @@
           ['duplicates', byType.campaign_delivered_duplicate || 0],
         ].forEach(function (pair) {
           var cell = document.createElement('div');
-          cell.innerHTML = '<b>' + pair[1] + '</b>' + pair[0];
+          cell.className = 'stat';
+          cell.innerHTML = '<b>' + pair[1] + '</b><span>' + pair[0] + '</span>';
           host.appendChild(cell);
         });
       });

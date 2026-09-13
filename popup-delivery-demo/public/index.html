@@ -3,84 +3,158 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Customer Website (mock) — Solitics Campaign Demo</title>
+  <title>Northfield — Customer Website (mock) — Solitics Campaign Demo</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>Customer Website (mock)</h1>
-      <p class="sub">
-        This page stands in for a Solitics customer site. It loads the mock SDK, which
-        registers over REST, opens a WebSocket, and renders popups pushed by the campaign engine.
-      </p>
-    </header>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <a class="brand" href="/"><span class="brand__mark">N</span>Northfield</a>
+      <nav class="topbar__nav">
+        <a href="/" data-nav="/">Shop</a>
+        <a href="/dashboard.html">Flow inspector →</a>
+      </nav>
+      <div class="topbar__actions">
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle theme">
+          <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+          <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        </button>
+        <div class="cart-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7V6a4 4 0 118 0v1"/><rect x="4" y="7" width="16" height="13" rx="2"/></svg>
+          <span>Cart&nbsp;<strong data-testid="cart-total">$0</strong></span>
+        </div>
+      </div>
+    </div>
+  </header>
 
-    <nav class="nav">
-      <a href="/">eligible user</a>
-      <a href="/?testUser=non-eligible">non-eligible user</a>
-      <a href="/?testScenario=duplicate-delivery">duplicate delivery</a>
-      <a href="/?testUser=vip">vip user</a>
-      <a href="/dashboard.html">flow inspector →</a>
-    </nav>
+  <div class="container">
+    <section class="hero">
+      <div class="hero__copy">
+        <p class="eyebrow">Autumn collection</p>
+        <h1>Essentials, made to last a season and then some.</h1>
+        <p class="lede">Real product moments — every click here fires an actual event through the Solitics SDK.</p>
+      </div>
+    </section>
 
-    <div class="grid">
-      <section class="panel">
-        <h2>Shop — fires real events</h2>
-        <div id="products"></div>
-        <p class="sub note">
-          Cart total ≥ $100 triggers the free-shipping campaign.
-          Cart: <strong data-testid="cart-total">$0</strong>
+    <div class="demo-banner">
+      <div class="demo-banner__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 11.5h1.2v5"/></svg>
+      </div>
+      <div>
+        <h2>This is a mock storefront for the Solitics Campaign Demo</h2>
+        <p>
+          It embeds the real SDK, which registers over REST, opens a WebSocket, and renders
+          popups the campaign engine decides to push — live, in this tab.
+        </p>
+        <nav class="scenario-bar">
+          <a href="/" data-nav="/">Eligible user</a>
+          <a href="/?testUser=non-eligible" data-nav="/?testUser=non-eligible">Non-eligible user</a>
+          <a href="/?testScenario=duplicate-delivery" data-nav="/?testScenario=duplicate-delivery">Duplicate delivery</a>
+          <a href="/?testUser=vip" data-nav="/?testUser=vip">VIP user</a>
+        </nav>
+      </div>
+    </div>
+
+    <div class="grid-main" style="margin-top: 26px;">
+      <section class="card">
+        <div class="section-head">
+          <h2>Shop — fires real events</h2>
+          <span class="hint">Add to cart ≥ $100 → free shipping offer</span>
+        </div>
+        <div id="products" class="product-grid"></div>
+        <p class="cart-note">
+          Cart total: <strong data-testid="cart-total-note">$0</strong>
         </p>
       </section>
 
-      <section class="panel">
-        <h2>SDK state</h2>
-        <dl class="kv">
-          <dt>User</dt><dd data-testid="sdk-user">—</dd>
-          <dt>Session</dt><dd data-testid="sdk-session">—</dd>
-          <dt>Segments</dt><dd data-testid="sdk-segments">—</dd>
-          <dt>WebSocket</dt><dd data-testid="sdk-ws">connecting…</dd>
-        </dl>
-        <p class="actions">
-          <button type="button" class="ghost" data-testid="reset-user">New user (clear id)</button>
-        </p>
+      <section class="card">
+        <div class="section-head">
+          <h2>Live SDK console</h2>
+          <span class="hint">window.Solitics</span>
+        </div>
+        <div class="console__rows">
+          <div class="console__row">
+            <span class="console__label">User</span>
+            <span class="console__value" data-testid="sdk-user">—</span>
+          </div>
+          <div class="console__row">
+            <span class="console__label">Session</span>
+            <span class="console__value" data-testid="sdk-session">—</span>
+          </div>
+          <div class="console__row">
+            <span class="console__label">Segments</span>
+            <span class="console__value" data-testid="sdk-segments">—</span>
+          </div>
+          <div class="console__row">
+            <span class="console__label">WebSocket</span>
+            <span class="status-dot" data-testid="sdk-ws-dot"></span>
+            <span class="console__value" data-testid="sdk-ws">connecting…</span>
+          </div>
+        </div>
+        <div class="console__actions">
+          <button type="button" class="btn btn--ghost btn--sm" data-testid="reset-user">New user (clear id)</button>
+        </div>
       </section>
     </div>
 
-    <div class="logbox" data-testid="sdk-log"></div>
+    <div class="log-console">
+      <div class="log-console__head"><span class="log-console__title">Event log</span></div>
+      <div class="log-console__body" data-testid="sdk-log"></div>
+    </div>
+
+    <p class="footnote">Solitics real-time campaign delivery — reference demo, not a production storefront.</p>
   </div>
 
+  <script src="theme.js"></script>
   <script src="solitics-sdk.js"></script>
   <script>
     var PRODUCTS = [
-      { sku: 'tee-01', name: 'Cotton T-shirt', price: 40 },
-      { sku: 'hd-02', name: 'Hoodie', price: 75 },
-      { sku: 'sn-03', name: 'Sneakers', price: 120 },
+      { sku: 'tee-01', name: 'Cotton T-shirt', price: 40, tint: 'linear-gradient(135deg,#5b8a86,#2f5f5b)' },
+      { sku: 'hd-02', name: 'Hoodie', price: 75, tint: 'linear-gradient(135deg,#7c6bd6,#4b3a9e)' },
+      { sku: 'sn-03', name: 'Sneakers', price: 120, tint: 'linear-gradient(135deg,#c98a4b,#8a5323)' },
     ];
 
     var cartTotal = 0;
     var container = document.getElementById('products');
+    var cartTotalNote = document.querySelector('[data-testid="cart-total-note"]');
+
+    function initials(name) {
+      return name.split(' ').map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+    }
 
     PRODUCTS.forEach(function (product) {
-      var row = document.createElement('div');
-      row.className = 'product';
-      row.innerHTML =
-        '<div><div class="name">' + product.name + '</div>' +
-        '<div class="price">$' + product.price + '</div></div>';
+      var card = document.createElement('div');
+      card.className = 'product-card';
+
+      var media = document.createElement('div');
+      media.className = 'product-card__media';
+      media.style.background = product.tint;
+      media.textContent = initials(product.name);
+
+      var body = document.createElement('div');
+      body.className = 'product-card__body';
+      body.innerHTML =
+        '<div class="product-card__name">' + product.name + '</div>' +
+        '<div class="product-card__price">$' + product.price + '</div>';
 
       var button = document.createElement('button');
       button.type = 'button';
+      button.className = 'btn btn--block product-card__cta';
       button.textContent = 'Add to cart';
       button.setAttribute('data-testid', 'add-to-cart-' + product.sku);
       button.addEventListener('click', function () {
         cartTotal += product.price;
-        document.querySelector('[data-testid="cart-total"]').textContent = '$' + cartTotal;
+        var text = '$' + cartTotal;
+        document.querySelector('[data-testid="cart-total"]').textContent = text;
+        cartTotalNote.textContent = text;
+        document.querySelector('.cart-pill').classList.add('is-bump');
         window.Solitics.track('add_to_cart', { sku: product.sku, price: product.price });
       });
 
-      row.appendChild(button);
-      container.appendChild(row);
+      body.appendChild(button);
+      card.appendChild(media);
+      card.appendChild(body);
+      container.appendChild(card);
     });
 
     document.querySelector('[data-testid="reset-user"]').addEventListener('click', function () {
@@ -97,6 +171,7 @@
 
     document.addEventListener('solitics:connected', function () {
       document.querySelector('[data-testid="sdk-ws"]').textContent = 'open';
+      document.querySelector('[data-testid="sdk-ws-dot"]').classList.add('is-live');
     });
 
     var logbox = document.querySelector('[data-testid="sdk-log"]');
@@ -109,6 +184,16 @@
       logbox.appendChild(line);
       logbox.scrollTop = logbox.scrollHeight;
     });
+
+    // Highlight the active scenario link, purely cosmetic.
+    (function () {
+      var here = location.pathname + location.search;
+      document.querySelectorAll('[data-nav]').forEach(function (a) {
+        if (a.getAttribute('data-nav') === here || (a.getAttribute('data-nav') === '/' && here === '/')) {
+          a.classList.add('is-current');
+        }
+      });
+    })();
   </script>
 </body>
 </html>
