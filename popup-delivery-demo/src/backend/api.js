@@ -81,9 +81,16 @@ const routes = [
 
       // Test users are expressed as ordinary profile traits, so the rest of
       // the pipeline treats them like any real attribute.
+      //
+      // Written in both directions on purpose. Only ever setting eligible
+      // false made "non-eligible" a one-way door: identify() merges traits,
+      // so nothing cleared it, and the same visitor switching back to
+      // Eligible or VIP stayed outside high_intent and silently stopped
+      // receiving every campaign. Each scenario now fully describes the user
+      // it is naming.
       const traits = { ...(body.traits || {}) };
-      if (body.testUser === 'non-eligible') traits.eligible = false;
-      if (body.testUser === 'vip') traits.tier = 'vip';
+      traits.eligible = body.testUser !== 'non-eligible';
+      traits.tier = body.testUser === 'vip' ? 'vip' : null;
 
       profiles.identify(body.userId, traits);
 

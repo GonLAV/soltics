@@ -354,6 +354,22 @@
       location.href = location.pathname;
     });
 
+    // All three runners spawn Playwright, and the server allows one run at a
+    // time. Each panel used to disable only its own button, so starting one
+    // and clicking another returned 409 and painted a red error mid-demo.
+    // They lock and unlock together.
+    var testRunners = (function () {
+      function all() {
+        return [].slice.call(
+          document.querySelectorAll('[data-cr], [data-testid="run-contract"]')
+        );
+      }
+      return {
+        lock: function () { all().forEach(function (b) { b.disabled = true; }); },
+        unlock: function () { all().forEach(function (b) { b.disabled = false; }); },
+      };
+    })();
+
     // Runs the real Playwright contract spec against this running instance and
     // renders each verdict, so the demo can show the test rather than claim it.
     (function () {
@@ -363,22 +379,35 @@
       if (!button) return;
 
       button.addEventListener('click', function () {
-        button.disabled = true;
+        testRunners.lock();
         button.classList.add('is-running');
-        summary.textContent = 'Running against this app…';
         list.hidden = true;
         list.innerHTML = '';
+
+        var started = Date.now();
+        summary.textContent = 'running against this app… 0s';
+        var ticker = setInterval(function () {
+          summary.textContent =
+            'running against this app… ' + Math.round((Date.now() - started) / 1000) + 's';
+        }, 250);
+        var stopTicker = function () { clearInterval(ticker); };
 
         fetch('/api/v1/qa/run-contract', { method: 'POST' })
           .then(function (response) { return response.json(); })
           .then(function (data) {
+            stopTicker();
             if (!data.tests || !data.tests.length) {
-              summary.textContent = data.error || 'No results returned';
-              summary.className = 'is-fail';
+              // A busy runner is a wait, not a failure — don't paint it red.
+              var busy = /in progress/i.test(data.error || '');
+              summary.textContent = busy
+                ? 'another run is finishing — try again in a moment'
+                : data.error || 'No results returned';
+              summary.className = busy ? '' : 'is-fail';
               return;
             }
 
-            summary.textContent = data.passed + '/' + data.total + ' passed · ' + data.spec;
+            summary.textContent = data.passed + '/' + data.total + ' passed · ' +
+              Math.round((Date.now() - started) / 1000) + 's';
             summary.className = data.ok ? 'is-pass' : 'is-fail';
 
             data.tests.forEach(function (item) {
@@ -395,11 +424,13 @@
             list.hidden = false;
           })
           .catch(function (error) {
+            stopTicker();
             summary.textContent = 'Run failed: ' + error.message;
             summary.className = 'is-fail';
           })
           .finally(function () {
-            button.disabled = false;
+            stopTicker();
+            testRunners.unlock();
             button.classList.remove('is-running');
           });
       });
@@ -459,27 +490,42 @@
       Array.prototype.forEach.call(buttons, function (button) {
         button.addEventListener('click', function () {
           var which = button.getAttribute('data-cr');
-          Array.prototype.forEach.call(buttons, function (b) { b.disabled = true; });
-          summary.textContent = 'Running ' + which + '…';
+          testRunners.lock();
           summary.className = '';
           list.hidden = true;
           list.innerHTML = '';
 
+          // A real browser run takes ten-odd seconds. Without a moving
+          // counter the panel reads as hung, which is worse than the wait.
+          var started = Date.now();
+          summary.textContent = 'running ' + which + '… 0s';
+          var ticker = setInterval(function () {
+            summary.textContent =
+              'running ' + which + '… ' + Math.round((Date.now() - started) / 1000) + 's';
+          }, 250);
+          var stopTicker = function () { clearInterval(ticker); };
+
           fetch('/api/v1/qa/code-review/' + which, { method: 'POST' })
             .then(function (r) { return r.json(); })
             .then(function (data) {
+              stopTicker();
+              var took = Math.round((Date.now() - started) / 1000) + 's';
+
               if (!data.tests || !data.tests.length) {
-                summary.textContent = data.error || 'No results returned';
-                summary.className = 'is-fail';
+                var busy = /in progress/i.test(data.error || '');
+                summary.textContent = busy
+                  ? 'another run is finishing — try again in a moment'
+                  : data.error || 'No results returned';
+                summary.className = busy ? '' : 'is-fail';
                 return;
               }
 
               var failed = data.total - data.passed;
               if (data.expectedToFail) {
-                summary.textContent = failed + ' of ' + data.total + ' fail — as reviewed';
+                summary.textContent = failed + ' of ' + data.total + ' fail · ' + took;
                 summary.className = 'is-fail';
               } else {
-                summary.textContent = data.passed + '/' + data.total + ' passed';
+                summary.textContent = data.passed + '/' + data.total + ' passed · ' + took;
                 summary.className = 'is-pass';
               }
 
@@ -497,11 +543,13 @@
               list.hidden = false;
             })
             .catch(function (error) {
+              stopTicker();
               summary.textContent = 'Run failed: ' + error.message;
               summary.className = 'is-fail';
             })
             .finally(function () {
-              Array.prototype.forEach.call(buttons, function (b) { b.disabled = false; });
+              stopTicker();
+              testRunners.unlock();
             });
         });
       });

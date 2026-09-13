@@ -70,7 +70,10 @@ function run(baseUrl, options = {}) {
 
   const spec = options.spec || SPEC;
   const label = options.label || 'Contract';
-  const args = [CLI, 'test', spec, '--reporter=json', '--workers=1'];
+  // Parallel by default: every spec here uses its own browser context and its
+  // own user, and a run that takes a minute is not demonstrable.
+  const workers = options.workers || 4;
+  const args = [CLI, 'test', spec, '--reporter=json', '--workers=' + workers];
   if (options.config) args.push('--config=' + options.config);
 
   bus.trace('api', `${label} test run started`, { baseUrl, spec });

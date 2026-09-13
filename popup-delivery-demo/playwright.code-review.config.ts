@@ -10,8 +10,12 @@ import { defineConfig, devices } from '@playwright/test';
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
 
 export default defineConfig({
+  // Each test drives its own browser context against its own user, so there
+  // is nothing to serialise. Running them in parallel is what keeps this
+  // demonstrable live rather than a minute of dead air.
   testDir: './tests-code-review',
-  fullyParallel: false,
+  fullyParallel: true,
+  workers: 4,
   retries: 0,
   reporter: [['list']],
   use: {
