@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Flow Inspector — Solitics Campaign Demo</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+    @media (max-width: 860px) { .flow { grid-template-columns: repeat(2, 1fr); } }
+    .col h3 {
+      font-size: .7rem; text-transform: uppercase; letter-spacing: .07em;
+      color: var(--muted); margin: 0 0 8px; text-align: center;
+    }
+    .node {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+      padding: 9px 11px; margin-bottom: 8px; font-size: .8rem; transition: all .18s ease;
+    }
+    .node .label { font-weight: 600; }
+    .node .last { color: var(--muted); font-size: .72rem; margin-top: 2px; min-height: 1em; }
+    .node.hot { border-color: var(--brand); background: #e9f6f4; box-shadow: 0 0 0 3px rgba(14,124,116,.12); }
+    .col--client .node.hot { border-color: var(--accent); background: #f0ecfd; box-shadow: 0 0 0 3px rgba(107,79,216,.12); }
+    .campaign { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: .82rem; }
+    .campaign:last-child { border-bottom: none; }
+    .badge { font-size: .68rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+    .badge.active { color: var(--brand); border-color: var(--brand); }
+    .stats { display: flex; gap: 18px; flex-wrap: wrap; font-size: .82rem; }
+    .stats b { display: block; font-size: 1.3rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Flow Inspector</h1>
+      <p class="sub">
+        Live trace of every hop. Open the
+        <a href="/" target="_blank">customer website</a> in another tab and watch the boxes fire.
+      </p>
+    </header>
+
+    <nav class="nav">
+      <a href="/">← customer website</a>
+      <a href="#" data-testid="reset-state">reset backend state</a>
+    </nav>
+
+    <div class="flow">
+      <div class="col col--client" data-col="client"><h3>Client Browser</h3></div>
+      <div class="col" data-col="backend"><h3>Solitics Backend</h3></div>
+      <div class="col" data-col="engine"><h3>Campaign Engine</h3></div>
+      <div class="col" data-col="stores"><h3>Data Stores</h3></div>
+    </div>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>Campaigns</h2>
+        <div data-testid="campaign-list"></div>
+      </section>
+      <section class="panel">
+        <h2>Analytics</h2>
+        <div class="stats" data-testid="analytics"></div>
+      </section>
+    </div>
+
+    <div class="logbox" data-testid="trace-log"></div>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>

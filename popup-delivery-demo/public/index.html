@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Customer Website (mock) — Solitics Campaign Demo</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Customer Website (mock)</h1>
+      <p class="sub">
+        This page stands in for a Solitics customer site. It loads the mock SDK, which
+        registers over REST, opens a WebSocket, and renders popups pushed by the campaign engine.
+      </p>
+    </header>
+
+    <nav class="nav">
+      <a href="/">eligible user</a>
+      <a href="/?testUser=non-eligible">non-eligible user</a>
+      <a href="/?testScenario=duplicate-delivery">duplicate delivery</a>
+      <a href="/?testUser=vip">vip user</a>
+      <a href="/dashboard.html">flow inspector →</a>
+    </nav>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>Shop — fires real events</h2>
+        <div id="products"></div>
+        <p class="sub note">
+          Cart total ≥ $100 triggers the free-shipping campaign.
+          Cart: <strong data-testid="cart-total">$0</strong>
+        </p>
+      </section>
+
+      <section class="panel">
+        <h2>SDK state</h2>
+        <dl class="kv">
+          <dt>User</dt><dd data-testid="sdk-user">—</dd>
+          <dt>Session</dt><dd data-testid="sdk-session">—</dd>
+          <dt>Segments</dt><dd data-testid="sdk-segments">—</dd>
+          <dt>WebSocket</dt><dd data-testid="sdk-ws">connecting…</dd>
+        </dl>
+        <p class="actions">
+          <button type="button" class="ghost" data-testid="reset-user">New user (clear id)</button>
+        </p>
+      </section>
+    </div>
+
+    <div class="logbox" data-testid="sdk-log"></div>
+  </div>
+
+  <script src="solitics-sdk.js"></script>
+  <script>
+    var PRODUCTS = [
+      { sku: 'tee-01', name: 'Cotton T-shirt', price: 40 },
+      { sku: 'hd-02', name: 'Hoodie', price: 75 },
+      { sku: 'sn-03', name: 'Sneakers', price: 120 },
+    ];
+
+    var cartTotal = 0;
+    var container = document.getElementById('products');
+
+    PRODUCTS.forEach(function (product) {
+      var row = document.createElement('div');
+      row.className = 'product';
+      row.innerHTML =
+        '<div><div class="name">' + product.name + '</div>' +
+        '<div class="price">$' + product.price + '</div></div>';
+
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'Add to cart';
+      button.setAttribute('data-testid', 'add-to-cart-' + product.sku);
+      button.addEventListener('click', function () {
+        cartTotal += product.price;
+        document.querySelector('[data-testid="cart-total"]').textContent = '$' + cartTotal;
+        window.Solitics.track('add_to_cart', { sku: product.sku, price: product.price });
+      });
+
+      row.appendChild(button);
+      container.appendChild(row);
+    });
+
+    document.querySelector('[data-testid="reset-user"]').addEventListener('click', function () {
+      try { localStorage.removeItem('solitics_user_id'); } catch (e) {}
+      location.href = location.pathname;
+    });
+
+    document.addEventListener('solitics:ready', function (event) {
+      document.querySelector('[data-testid="sdk-user"]').textContent = event.detail.userId;
+      document.querySelector('[data-testid="sdk-session"]').textContent = event.detail.sessionId;
+      document.querySelector('[data-testid="sdk-segments"]').textContent =
+        event.detail.profile.segments.join(', ');
+    });
+
+    document.addEventListener('solitics:connected', function () {
+      document.querySelector('[data-testid="sdk-ws"]').textContent = 'open';
+    });
+
+    var logbox = document.querySelector('[data-testid="sdk-log"]');
+    document.addEventListener('solitics:log', function (event) {
+      var line = document.createElement('div');
+      var time = new Date(event.detail.at).toLocaleTimeString();
+      line.innerHTML =
+        '<span class="stage">[' + time + ' ' + event.detail.stage + ']</span> ' +
+        event.detail.message;
+      logbox.appendChild(line);
+      logbox.scrollTop = logbox.scrollHeight;
+    });
+  </script>
+</body>
+</html>
