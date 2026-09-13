@@ -1,0 +1,17 @@
+{
+  "name": "alon-gen",
+  "version": "1.0.2",
+  "description": "אלון — יועץ אבחוני אסטרטגי לעסק שלך. סוכן שותף שעובר איתך על תהליכי העבודה בעסק, ממפה איפה הם נתקעים (אבחון), ומכריע יחד איתך אילו סוכנים כדאי לבנות ובאיזה סדר (הכרעה) — עם שער רגישות שגובר על הכול. מאבחן ומחליט, לא בונה. מופעל עם /alon.",
+  "author": {
+    "name": "סיגל"
+  },
+  "keywords": [
+    "alon",
+    "partner-agent",
+    "process-diagnosis",
+    "automation-triage",
+    "bottleneck",
+    "prioritization",
+    "hebrew"
+  ]
+}

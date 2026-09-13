@@ -68,6 +68,7 @@ popup-delivery-demo/
 │  ├─ index.html          # mock customer website (shop UI that fires real events)
 │  ├─ solitics-sdk.js     # the SDK: init → REST → WebSocket → render popup
 │  ├─ dashboard.html/.js  # live flow inspector
+│  ├─ theme.js            # shared light/dark toggle (cosmetic only)
 │  └─ styles.css
 ├─ src/
 │  ├─ bus.js              # internal trace bus (observability only)
