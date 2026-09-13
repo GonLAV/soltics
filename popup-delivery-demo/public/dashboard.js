@@ -3,13 +3,6 @@
  * /ws/inspector and maps each entry onto the architecture diagram, the
  * activity feed and the KPI row. Purely observability — nothing here
  * feeds back into the delivery path.
- * Flow inspector — renders the architecture diagram and lights each box as the
- * backend traces activity through it over /ws/inspector.
- *
- * Enhanced: scenario triggers, live decision detail, reason distribution,
- * fire counters, and a structured delivery timeline.
- * Live journey dashboard. It maps backend trace events to the visual
- * orchestration stages while keeping campaign and KPI data in sync.
  */
 (function () {
   'use strict';
@@ -59,13 +52,12 @@
 
   var nodes = {};
   var timers = {};
-  var fireCounts = {};
-  var reasonCounts = {};
-  var lastDecision = null;
-  var recentEntries = [];
-  var refreshTimer = null;
   var logbox = document.querySelector('[data-testid="trace-log"]');
   var emptyState = document.querySelector('[data-empty-state]');
+  var overlay = document.querySelector('.flow__overlay');
+  var lastFiredNode = null;
+  var lastFiredAt = 0;
+  var STALE_GAP_MS = 1500; // a new burst after this much silence starts a fresh trail, not a jump from history
 
   function escapeHtml(value) {
     return String(value)
@@ -80,9 +72,6 @@
     return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || ICONS.spark) + '</svg>';
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Build the diagram with fire counters                                */
-  /* ------------------------------------------------------------------ */
   function buildDiagram() {
     Object.keys(LAYOUT).forEach(function (column) {
       var host = document.querySelector('[data-col="' + column + '"]');
@@ -93,13 +82,6 @@
         box.setAttribute('data-node', id);
         box.innerHTML =
           '<div class="node__head">' +
-            '<span class="label">' + spec.label + '</span>' +
-            '<span class="node__count" data-count="' + spec.id + '">0</span>' +
-          '</div>' +
-          '<div class="last"></div>';
-        host.appendChild(box);
-        nodes[spec.id] = box;
-        fireCounts[spec.id] = 0;
           '<span class="status-dot"></span>' +
           '<span class="node__label">' + meta.label + '</span>' +
           '<span class="node__time"></span>' +
@@ -111,42 +93,62 @@
     });
   }
 
+  // Real coordinates of a node's center, relative to the overlay's own box —
+  // recomputed live so it stays correct across resizes and horizontal scroll.
+  function centerOf(el) {
+    var overlayRect = overlay.getBoundingClientRect();
+    var rect = el.getBoundingClientRect();
+    return {
+      x: rect.left + rect.width / 2 - overlayRect.left,
+      y: rect.top + rect.height / 2 - overlayRect.top,
+    };
+  }
+
+  // Draws one real hop: a line plus a dot that travels it, exactly the path
+  // this specific trace entry actually took through the architecture. Not a
+  // canned animation — the endpoints come from the real DOM node positions,
+  // in the real order the backend emitted them.
+  function drawTravel(fromBox, toBox) {
+    var svgns = 'http://www.w3.org/2000/svg';
+    var a = centerOf(fromBox);
+    var b = centerOf(toBox);
+
+    var group = document.createElementNS(svgns, 'g');
+
+    var line = document.createElementNS(svgns, 'line');
+    line.setAttribute('x1', a.x);
+    line.setAttribute('y1', a.y);
+    line.setAttribute('x2', b.x);
+    line.setAttribute('y2', b.y);
+    line.setAttribute('class', 'flow__line');
+    line.style.animation = 'flow-dash-move .45s linear';
+    group.appendChild(line);
+
+    var dot = document.createElementNS(svgns, 'circle');
+    dot.setAttribute('r', 4);
+    dot.setAttribute('class', 'flow__dot');
+    var motion = document.createElementNS(svgns, 'animateMotion');
+    motion.setAttribute('dur', '0.45s');
+    motion.setAttribute('fill', 'freeze');
+    motion.setAttribute('path', 'M' + a.x + ',' + a.y + ' L' + b.x + ',' + b.y);
+    dot.appendChild(motion);
+    group.appendChild(dot);
+
+    overlay.appendChild(group);
+    setTimeout(function () { line.style.opacity = '0'; }, 420);
+    setTimeout(function () { group.remove(); }, 750);
+  }
+
   function pulse(entry) {
     var box = nodes[entry.node];
     if (!box) return;
 
-    fireCounts[entry.node] = (fireCounts[entry.node] || 0) + 1;
-    var countEl = document.querySelector('[data-count="' + entry.node + '"]');
-    if (countEl) countEl.textContent = fireCounts[entry.node];
+    if (lastFiredNode && lastFiredNode !== box && entry.at - lastFiredAt < STALE_GAP_MS) {
+      drawTravel(lastFiredNode, box);
+    }
+    lastFiredNode = box;
+    lastFiredAt = entry.at;
 
-    box.classList.add('hot');
-    box.querySelector('.last').textContent = entry.message;
-
-    clearTimeout(timers[entry.node]);
-    timers[entry.node] = setTimeout(function () {
-      box.classList.remove('hot');
-    }, 1200);
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Trace log with color-coded node types                                */
-  /* ------------------------------------------------------------------ */
-  var NODE_COLORS = {
-    'sdk': '#95bf47',
-    'api': '#008060',
-    'ingestion': '#008060',
-    'profile': '#008060',
-    'realtime': '#6b4fd8',
-    'campaign-manager': '#008060',
-    'rules': '#e34850',
-    'decision': '#008060',
-    'action-sender': '#95bf47',
-    'campaigns-db': '#616066',
-    'profiles-db': '#616066',
-    'analytics-db': '#616066',
-  };
-
-  var logbox = document.querySelector('[data-testid="trace-log"]');
     var isWarn = WARN_PATTERN.test(entry.message);
     box.classList.add('is-hot');
     box.classList.toggle('is-warn', isWarn);
@@ -167,22 +169,6 @@
 
     var meta = NODE_META[entry.node] || { label: entry.node };
     var isWarn = WARN_PATTERN.test(entry.message);
-    if (emptyState && emptyState.parentNode) emptyState.remove();
-    recentEntries.unshift(entry);
-    recentEntries = recentEntries.slice(0, 50);
-
-    var line = document.createElement('div');
-    var time = new Date(entry.at).toLocaleTimeString();
-    var color = NODE_COLORS[entry.node] || '#95bf47';
-    line.innerHTML =
-      '<span class="stage" style="color:' + color + '">[' + time + ' ' + entry.node + ']</span> ' +
-      entry.message;
-    var warnClass = WARN_PATTERN.test(entry.message) ? ' warn' : '';
-    line.innerHTML =
-      '<span class="stage' + warnClass + '">[' + time + ' ' + entry.node + ']</span> ' + entry.message;
-    logbox.appendChild(line);
-    while (logbox.childElementCount > 300) logbox.removeChild(logbox.firstChild);
-    logbox.scrollTop = logbox.scrollHeight;
     var time = new Date(entry.at).toLocaleTimeString([], {
       hour: '2-digit',
       minute: '2-digit',
@@ -211,141 +197,27 @@
     label.textContent = connected ? 'live' : 'reconnecting…';
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Decision detail — parse decision traces to show per-campaign results */
-  /* ------------------------------------------------------------------ */
-  function categorizeReason(reason) {
-    if (!reason) return 'unknown';
-    if (reason.startsWith('trigger mismatch')) return 'trigger mismatch';
-    if (reason.includes('audience')) return 'audience miss';
-    if (reason.includes('condition')) return 'condition failed';
-    if (reason.includes('frequency cap')) return 'frequency cap';
-    if (reason.includes('segment match') || reason.includes('passed') || reason.includes('never delivered') || reason.includes('within')) return 'triggered';
-    return 'other';
+  // Trace entries for one click arrive within a few milliseconds of each
+  // other (it's all synchronous on the server) — too fast to actually see as
+  // a request crossing the diagram. Replaying the queue at a fixed pace turns
+  // real backend causal order into a visible left-to-right/back-and-forth
+  // sweep, instead of one simultaneous flash.
+  var playQueue = [];
+  var playing = false;
+  var STEP_MS = 130;
+
+  function playNext() {
+    var entry = playQueue.shift();
+    if (!entry) { playing = false; return; }
+    pulse(entry);
+    appendLog(entry);
+    refreshPanelsSoon();
+    setTimeout(playNext, STEP_MS);
   }
 
-  function updateDecisionDetail(entry) {
-    if (entry.node !== 'decision') return;
-
-    var data = entry.data || {};
-    var skipped = data.skipped || [];
-    var triggered = [];
-    var match = entry.message.match(/TRIGGER\s+(.+)/);
-    if (match) {
-      triggered = match[1].split(',').map(function (s) { return s.trim(); });
-    }
-
-    var host = document.querySelector('[data-testid="decision-detail"]');
-    host.innerHTML = '';
-
-    var allCampaigns = [];
-
-    triggered.forEach(function (id) {
-      allCampaigns.push({ id: id, triggered: true, reason: 'matched audience + conditions' });
-    });
-
-    skipped.forEach(function (skip) {
-      allCampaigns.push({ id: skip.campaignId, triggered: false, reason: skip.reason });
-    });
-
-    if (allCampaigns.length === 0) {
-      host.innerHTML = '<div class="decision-empty">No campaigns evaluated.</div>';
-      return;
-    }
-
-    // Event label
-    var eventMatch = entry.message.match(/"([^"]+)"/);
-    var eventLabel = document.createElement('div');
-    eventLabel.className = 'decision-event';
-    eventLabel.textContent = eventMatch ? 'Event: ' + eventMatch[1] : 'Event: unknown';
-    host.appendChild(eventLabel);
-
-    allCampaigns.forEach(function (c) {
-      var row = document.createElement('div');
-      row.className = 'decision-row' + (c.triggered ? ' decision-row--triggered' : ' decision-row--skipped');
-
-      var status = document.createElement('span');
-      status.className = 'decision-row__status';
-      status.textContent = c.triggered ? 'TRIGGER' : 'SKIP';
-
-      var name = document.createElement('span');
-      name.className = 'decision-row__name';
-      name.textContent = c.id;
-
-      var reason = document.createElement('div');
-      reason.className = 'decision-row__reason';
-      reason.textContent = c.reason;
-
-      row.appendChild(status);
-      row.appendChild(name);
-      row.appendChild(reason);
-      host.appendChild(row);
-
-      // Track reason distribution
-      var cat = c.triggered ? 'triggered' : categorizeReason(c.reason);
-      reasonCounts[cat] = (reasonCounts[cat] || 0) + 1;
-    });
-
-    updateReasonDistribution();
-  }
-
-  function updateReasonDistribution() {
-    var host = document.querySelector('[data-testid="reason-distribution"]');
-    var total = 0;
-    Object.keys(reasonCounts).forEach(function (k) { total += reasonCounts[k]; });
-    if (total === 0) {
-      host.innerHTML = '<div class="decision-empty">No decisions evaluated yet.</div>';
-      return;
-    }
-
-    var categories = [
-      { key: 'triggered', label: 'Triggered', color: '#008060' },
-      { key: 'audience miss', label: 'Audience miss', color: '#e34850' },
-      { key: 'condition failed', label: 'Condition failed', color: '#e34850' },
-      { key: 'frequency cap', label: 'Frequency cap', color: '#e34850' },
-      { key: 'trigger mismatch', label: 'Trigger mismatch', color: '#b3b3b3' },
-      { key: 'other', label: 'Other', color: '#b3b3b3' },
-    ];
-
-    host.innerHTML = '';
-    categories.forEach(function (cat) {
-      var count = reasonCounts[cat.key] || 0;
-      if (count === 0) return;
-      var pct = Math.round((count / total) * 100);
-
-      var bar = document.createElement('div');
-      bar.className = 'reason-bar';
-      bar.innerHTML =
-        '<div class="reason-bar__head">' +
-          '<span>' + cat.label + '</span>' +
-          '<span class="reason-bar__count">' + count + ' (' + pct + '%)</span>' +
-        '</div>' +
-        '<div class="reason-bar__track">' +
-          '<div class="reason-bar__fill" style="width:' + pct + '%;background:' + cat.color + '"></div>' +
-        '</div>';
-      host.appendChild(bar);
-    });
-
-    var totalEl = document.createElement('div');
-    totalEl.className = 'reason-total';
-    totalEl.textContent = total + ' total decisions evaluated';
-    host.appendChild(totalEl);
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* WebSocket connection                                                */
-  /* ------------------------------------------------------------------ */
-  var wsStatusDot = document.querySelector('.ws-status__dot');
-  var wsStatusText = document.querySelector('.ws-status__text');
-
-  function setWsStatus(connected) {
-    if (connected) {
-      wsStatusDot.classList.add('ws-status__dot--live');
-      wsStatusText.textContent = 'live';
-    } else {
-      wsStatusDot.classList.remove('ws-status__dot--live');
-      wsStatusText.textContent = 'reconnecting…';
-    }
+  function enqueueTrace(entry) {
+    playQueue.push(entry);
+    if (!playing) { playing = true; playNext(); }
   }
 
   function connect() {
@@ -353,8 +225,6 @@
     var socket = new WebSocket(protocol + '//' + window.location.host + '/ws/inspector');
 
     socket.addEventListener('open', function () {
-      setWsStatus(true);
-      setConnState('live');
       setConnection(true);
     });
 
@@ -363,26 +233,15 @@
 
       if (message.type === 'backlog') {
         message.entries.slice(-15).forEach(appendLog);
-        message.entries.forEach(function (entry) {
-          appendLog(entry);
-          pulse(entry);
-        });
-        message.entries.slice(-12).forEach(appendLog);
         return;
       }
 
       if (message.type === 'trace') {
-        pulse(message.entry);
-        appendLog(message.entry);
-        updateDecisionDetail(message.entry);
-        refreshPanelsSoon();
+        enqueueTrace(message.entry);
       }
     });
 
     socket.addEventListener('close', function () {
-      setWsStatus(false);
-      // The dev server restarts often; retry quietly.
-      setConnState('reconnecting');
       setConnection(false);
       setTimeout(connect, 1000);
     });
@@ -394,81 +253,6 @@
     refreshTimer = setTimeout(refreshPanels, 250);
   }
 
-  function refreshPanels() {
-    fetch('/api/v1/campaigns')
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        var host = document.querySelector('[data-testid="campaign-list"]');
-        host.innerHTML = '';
-
-        data.campaigns.forEach(function (campaign) {
-          var row = document.createElement('div');
-          row.className = 'campaign-row';
-          row.setAttribute('data-campaign-row', campaign.id);
-
-          var left = document.createElement('div');
-          left.innerHTML =
-            '<div><strong>' + campaign.name + '</strong></div>' +
-            '<div class="campaign-row__meta">on ' + campaign.trigger.event +
-            ' → [' + (campaign.audience.segments.join(', ') || 'everyone') + ']</div>';
-
-          var right = document.createElement('div');
-          right.style.display = 'flex';
-          right.style.alignItems = 'center';
-          right.style.gap = '8px';
-
-          right.className = 'campaign-row__right';
-          var badge = document.createElement('span');
-          badge.className = 'badge' + (campaign.status === 'active' ? ' active' : '');
-          badge.textContent = campaign.status;
-
-          var toggle = document.createElement('button');
-          toggle.className = 'ghost';
-          toggle.className = 'btn btn--ghost btn--sm';
-          toggle.textContent = campaign.status === 'active' ? 'Pause' : 'Activate';
-          toggle.addEventListener('click', function () {
-            fetch('/api/v1/campaigns/' + campaign.id + '/status', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                status: campaign.status === 'active' ? 'paused' : 'active',
-              }),
-            }).then(refreshPanels);
-          });
-
-          right.appendChild(badge);
-          right.appendChild(toggle);
-          row.appendChild(left);
-          row.appendChild(right);
-          host.appendChild(row);
-        });
-      });
-
-    fetch('/api/v1/analytics?limit=1')
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        var byType = data.summary.byType;
-        var host = document.querySelector('[data-testid="analytics"]');
-        host.innerHTML = '';
-
-        var events = byType.event || 0;
-        var delivered = byType.campaign_delivered || 0;
-        var duplicates = byType.campaign_delivered_duplicate || 0;
-        var deliveryRate = events > 0 ? Math.round((delivered / events) * 100) : 0;
-
-        [
-          ['events', events],
-          ['delivered', delivered],
-          ['delivery rate', deliveryRate + '%'],
-          ['duplicates', duplicates],
-        ].forEach(function (pair) {
-          var cell = document.createElement('div');
-          cell.className = 'stat-cell';
-          cell.innerHTML = '<b>' + pair[1] + '</b>' + pair[0];
-          cell.className = 'stat';
-          cell.innerHTML = '<b>' + pair[1] + '</b><span>' + pair[0] + '</span>';
-          host.appendChild(cell);
-        });
   function campaignIcon(campaign) {
     if (campaign.trigger.event === 'add_to_cart') return 'cart';
     if (campaign.audience.segments.indexOf('vip') >= 0) return 'star';
@@ -525,53 +309,6 @@
     if (element) element.textContent = value;
   }
 
-  function renderDecisionSummary(summary) {
-    var reasons = summary.byDecisionReason || {};
-    var total = Object.keys(reasons).reduce(function (sum, key) {
-      return sum + reasons[key];
-    }, 0);
-    var triggered = reasons.ELIGIBLE || 0;
-    var blocked = Math.max(total - triggered, 0);
-
-    document.querySelector('[data-decision-total]').textContent = total.toLocaleString();
-    document.querySelector('[data-decision-triggered]').textContent = triggered.toLocaleString();
-    document.querySelector('[data-decision-blocked]').textContent = blocked.toLocaleString();
-
-    var labels = {
-      ELIGIBLE: 'Qualified',
-      AUDIENCE_MISMATCH: 'Audience mismatch',
-      CONDITION_FAILED: 'Condition failed',
-      FREQUENCY_CAP: 'Frequency cap',
-      TRIGGER_MISMATCH: 'Trigger mismatch',
-      INVALID_CONDITION: 'Invalid condition',
-    };
-    var order = [
-      'ELIGIBLE',
-      'AUDIENCE_MISMATCH',
-      'CONDITION_FAILED',
-      'FREQUENCY_CAP',
-      'TRIGGER_MISMATCH',
-      'INVALID_CONDITION',
-    ];
-    var host = document.querySelector('[data-reason-list]');
-    var populated = order.filter(function (reason) { return reasons[reason]; });
-
-    if (!populated.length) {
-      host.innerHTML =
-        '<div class="reason-empty">Run a shopper journey or synthetic check to populate decision evidence.</div>';
-      return;
-    }
-
-    host.innerHTML = populated.map(function (reason) {
-      var count = reasons[reason];
-      var width = total ? Math.max(5, Math.round((count / total) * 100)) : 0;
-      return '<div class="reason-row">' +
-        '<div><span><i class="reason-dot reason-dot--' + reason.toLowerCase() + '"></i>' +
-        escapeHtml(labels[reason] || reason) + '</span><b>' + count + '</b></div>' +
-        '<div class="reason-track"><i style="width:' + width + '%"></i></div></div>';
-    }).join('');
-  }
-
   function refreshPanels() {
     Promise.all([
       fetch('/api/v1/campaigns').then(function (r) { return r.json(); }),
@@ -591,55 +328,9 @@
       setMetric('delivered', delivered.toLocaleString());
       setMetric('profiles', healthData.profiles.toLocaleString());
       setMetric('delivery-rate', rate + '%');
-      renderDecisionSummary(analyticsData.summary);
-
-      var metricBar = document.querySelector('[data-metric-bar]');
-      if (metricBar) metricBar.style.width = Math.min(rate, 100) + '%';
     });
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Scenario triggers                                                    */
-  /* ------------------------------------------------------------------ */
-  var scenarioUrls = {
-    'eligible': function () {
-      return '/?userId=qa-demo-eligible-' + Date.now();
-    },
-    'non-eligible': function () {
-      return '/?testUser=non-eligible&userId=qa-demo-non-eligible-' + Date.now();
-    },
-    'duplicate': function () {
-      return '/?testScenario=duplicate-delivery&userId=qa-demo-dup-' + Date.now();
-    },
-    'cart': function () {
-      return '/?userId=qa-demo-cart-' + Date.now();
-    },
-  };
-
-  document.querySelectorAll('[data-scenario]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var scenario = btn.getAttribute('data-scenario');
-      var url = scenarioUrls[scenario] ? scenarioUrls[scenario]() : '/';
-      window.open(url, '_blank');
-    });
-  });
-
-  /* ------------------------------------------------------------------ */
-  /* Reset                                                               */
-  /* ------------------------------------------------------------------ */
-  document.querySelector('[data-testid="reset-state"]').addEventListener('click', function (event) {
-    event.preventDefault();
-    fetch('/api/v1/admin/reset', { method: 'POST' }).then(function () {
-      logbox.innerHTML = '';
-      // Reset all counters
-      Object.keys(fireCounts).forEach(function (k) { fireCounts[k] = 0; });
-      document.querySelectorAll('[data-count]').forEach(function (el) {
-        el.textContent = '0';
-      });
-      reasonCounts = {};
-      document.querySelector('[data-testid="decision-detail"]').innerHTML =
-        '<div class="decision-empty">No events yet — trigger a scenario to see decisions.</div>';
-      updateReasonDistribution();
   function showToast() {
     var toast = document.querySelector('[data-toast]');
     toast.classList.add('is-visible');
@@ -659,286 +350,6 @@
       showToast();
       refreshPanels();
     });
-  });
-
-  /* ------------------------------------------------------------------ */
-  /* Init                                                                */
-  /* ------------------------------------------------------------------ */
-  document.querySelector('.mobile-menu').addEventListener('click', function () {
-    document.body.classList.toggle('sidebar-open');
-  });
-
-  document.querySelector('[data-sidebar-close]').addEventListener('click', function () {
-    document.body.classList.remove('sidebar-open');
-  });
-
-  document.querySelectorAll('.sidebar-link').forEach(function (link) {
-    link.addEventListener('click', function () {
-      document.body.classList.remove('sidebar-open');
-    });
-  });
-
-  function postJson(url, body) {
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }).then(function (response) {
-      return response.json().then(function (json) {
-        if (!response.ok) throw new Error(json.error || 'Request failed');
-        return json;
-      });
-    });
-  }
-
-  function initProbe(testUser) {
-    var body = { userId: 'synthetic-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7) };
-    if (testUser) body.testUser = testUser;
-    return postJson('/api/v1/sdk/init', body);
-  }
-
-  function sendProbeEvent(sessionId, name, properties) {
-    return postJson('/api/v1/events', {
-      sessionId: sessionId,
-      event: { name: name, properties: properties || {}, timestamp: Date.now() },
-    }).then(function (response) { return response.results[0]; });
-  }
-
-  function decisionFor(result, campaignId) {
-    return result.decisions.find(function (decision) {
-      return decision.campaignId === campaignId;
-    });
-  }
-
-  function connectProbe(sessionId) {
-    return new Promise(function (resolve, reject) {
-      var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      var socket = new WebSocket(
-        protocol + '//' + window.location.host + '/ws?sessionId=' + encodeURIComponent(sessionId)
-      );
-      var timer = setTimeout(function () {
-        socket.close();
-        reject(new Error('WebSocket handshake exceeded 3 seconds'));
-      }, 3000);
-
-      socket.addEventListener('message', function onMessage(event) {
-        var message = JSON.parse(event.data);
-        if (message.type === 'connected') {
-          clearTimeout(timer);
-          socket.removeEventListener('message', onMessage);
-          resolve(socket);
-        }
-      });
-      socket.addEventListener('error', function () {
-        clearTimeout(timer);
-        reject(new Error('WebSocket connection failed'));
-      }, { once: true });
-    });
-  }
-
-  function nextAction(socket) {
-    return new Promise(function (resolve, reject) {
-      var timer = setTimeout(function () {
-        reject(new Error('No campaign action received within 3 seconds'));
-      }, 3000);
-      socket.addEventListener('message', function onMessage(event) {
-        var message = JSON.parse(event.data);
-        if (message.type !== 'action') return;
-        clearTimeout(timer);
-        socket.removeEventListener('message', onMessage);
-        resolve(message);
-      });
-    });
-  }
-
-  function requireDecision(result, campaignId, reasonCode) {
-    var decision = decisionFor(result, campaignId);
-    if (!decision || decision.reasonCode !== reasonCode) {
-      throw new Error(
-        'Expected ' + campaignId + ' to return ' + reasonCode +
-        ', received ' + (decision ? decision.reasonCode : 'no decision')
-      );
-    }
-    return decision;
-  }
-
-  async function runScenario(name) {
-    if (name === 'delivery') {
-      var deliverySession = await initProbe();
-      var socket = await connectProbe(deliverySession.sessionId);
-      var actionPromise = nextAction(socket);
-      var deliveryResult = await sendProbeEvent(deliverySession.sessionId, 'page_view');
-      var deliveryDecision = requireDecision(deliveryResult, 'cmp-20-off', 'ELIGIBLE');
-      var action = await actionPromise;
-      socket.close();
-      return {
-        title: 'End-to-end delivery passed',
-        detail: deliveryDecision.reasonCode + ' -> WebSocket action ' + action.deliveryId.slice(0, 8),
-      };
-    }
-
-    if (name === 'audience') {
-      var audienceSession = await initProbe('non-eligible');
-      var audienceResult = await sendProbeEvent(audienceSession.sessionId, 'page_view');
-      var audienceDecision = requireDecision(
-        audienceResult,
-        'cmp-20-off',
-        'AUDIENCE_MISMATCH'
-      );
-      return {
-        title: 'Audience isolation passed',
-        detail: audienceDecision.reason,
-      };
-    }
-
-    if (name === 'frequency') {
-      var frequencySession = await initProbe();
-      await sendProbeEvent(frequencySession.sessionId, 'page_view');
-      var repeated = await sendProbeEvent(frequencySession.sessionId, 'page_view');
-      var frequencyDecision = requireDecision(repeated, 'cmp-20-off', 'FREQUENCY_CAP');
-      return {
-        title: 'Frequency cap passed',
-        detail: frequencyDecision.reason,
-      };
-    }
-
-    if (name === 'threshold') {
-      var thresholdSession = await initProbe();
-      var below = await sendProbeEvent(thresholdSession.sessionId, 'add_to_cart', { price: 40 });
-      requireDecision(below, 'cmp-free-shipping', 'CONDITION_FAILED');
-      var above = await sendProbeEvent(thresholdSession.sessionId, 'add_to_cart', { price: 75 });
-      var thresholdDecision = requireDecision(above, 'cmp-free-shipping', 'ELIGIBLE');
-      return {
-        title: 'Behavioral threshold passed',
-        detail: '$40 rejected; cumulative $115 returned ' + thresholdDecision.reasonCode,
-      };
-    }
-
-    throw new Error('Unknown synthetic scenario');
-  }
-
-  var scenarioButtons = Array.from(document.querySelectorAll('[data-scenario]'));
-  scenarioButtons.forEach(function (button) {
-    button.addEventListener('click', function () {
-      var name = button.getAttribute('data-scenario');
-      var state = document.querySelector('[data-scenario-state="' + name + '"]');
-      var summary = document.querySelector('[data-probe-summary]');
-      var result = document.querySelector('[data-probe-result]');
-
-      scenarioButtons.forEach(function (item) { item.disabled = true; });
-      state.className = 'scenario-state is-running';
-      state.textContent = 'Running...';
-      summary.className = 'probe-status is-running';
-      summary.textContent = 'Checking';
-
-      runScenario(name)
-        .then(function (outcome) {
-          state.className = 'scenario-state is-passed';
-          state.textContent = 'Passed';
-          summary.className = 'probe-status is-passed';
-          summary.textContent = 'Last check passed';
-          result.className = 'probe-result is-passed';
-          result.hidden = false;
-          result.querySelector('[data-probe-title]').textContent = outcome.title;
-          result.querySelector('[data-probe-detail]').textContent = outcome.detail;
-          result.querySelector('[data-probe-time]').textContent =
-            new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          refreshPanels();
-        })
-        .catch(function (error) {
-          state.className = 'scenario-state is-failed';
-          state.textContent = 'Failed';
-          summary.className = 'probe-status is-failed';
-          summary.textContent = 'Attention needed';
-          result.className = 'probe-result is-failed';
-          result.hidden = false;
-          result.querySelector('[data-probe-title]').textContent = 'Check failed';
-          result.querySelector('[data-probe-detail]').textContent = error.message;
-          result.querySelector('[data-probe-time]').textContent =
-            new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        })
-        .finally(function () {
-          scenarioButtons.forEach(function (item) { item.disabled = false; });
-        });
-    });
-  });
-
-  var commandOverlay = document.querySelector('[data-command-overlay]');
-  var commandInput = document.querySelector('[data-command-input]');
-  var commandItems = Array.from(document.querySelectorAll('[data-command-item]'));
-  var commandEmpty = document.querySelector('[data-command-empty]');
-  var visibleCommandItems = commandItems.slice();
-  var activeCommandIndex = 0;
-
-  function setActiveCommand(index) {
-    visibleCommandItems.forEach(function (item) {
-      item.classList.remove('is-selected');
-    });
-    if (!visibleCommandItems.length) return;
-    activeCommandIndex = (index + visibleCommandItems.length) % visibleCommandItems.length;
-    visibleCommandItems[activeCommandIndex].classList.add('is-selected');
-  }
-
-  function openCommand() {
-    commandOverlay.hidden = false;
-    document.body.classList.add('command-open');
-    commandInput.value = '';
-    commandItems.forEach(function (item) { item.hidden = false; });
-    visibleCommandItems = commandItems.slice();
-    commandEmpty.hidden = true;
-    setActiveCommand(0);
-    setTimeout(function () { commandInput.focus(); }, 0);
-  }
-
-  function closeCommand() {
-    commandOverlay.hidden = true;
-    document.body.classList.remove('command-open');
-  }
-
-  document.querySelector('[data-command-open]').addEventListener('click', openCommand);
-  commandOverlay.addEventListener('click', function (event) {
-    if (event.target === commandOverlay) closeCommand();
-  });
-
-  commandItems.forEach(function (item, index) {
-    item.addEventListener('mouseenter', function () {
-      var visibleIndex = visibleCommandItems.indexOf(item);
-      if (visibleIndex >= 0) setActiveCommand(visibleIndex);
-    });
-    item.addEventListener('click', closeCommand);
-  });
-
-  commandInput.addEventListener('input', function () {
-    var query = commandInput.value.trim().toLowerCase();
-    visibleCommandItems = commandItems.filter(function (item) {
-      var matches = !query || item.getAttribute('data-search').indexOf(query) >= 0;
-      item.hidden = !matches;
-      return matches;
-    });
-    commandEmpty.hidden = visibleCommandItems.length !== 0;
-    setActiveCommand(0);
-  });
-
-  document.addEventListener('keydown', function (event) {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-      event.preventDefault();
-      if (commandOverlay.hidden) openCommand();
-      else closeCommand();
-      return;
-    }
-    if (commandOverlay.hidden) return;
-    if (event.key === 'Escape') closeCommand();
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      setActiveCommand(activeCommandIndex + 1);
-    }
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setActiveCommand(activeCommandIndex - 1);
-    }
-    if (event.key === 'Enter' && visibleCommandItems[activeCommandIndex]) {
-      visibleCommandItems[activeCommandIndex].click();
-    }
   });
 
   buildDiagram();

@@ -45,16 +45,18 @@ Action Sender → Real-time Server → popup.
 The demo is designed to communicate product quality and engineering judgment in about five
 minutes:
 
-1. Open the storefront and dashboard side by side. Explain that the browser uses REST for
-   commands and feedback, while delivery arrives asynchronously over WebSocket.
-2. Close the welcome offer, add the $40 tee, and show that the engine records
-   `CONDITION_FAILED` rather than silently doing nothing.
-3. Add the $75 hoodie. The cumulative $115 cart now qualifies, the journey nodes animate,
-   and the free-shipping action appears on the storefront.
-4. Open **Quality center** and run the audience-isolation and frequency-cap probes. These
-   use the real API and decision engine, not mocked UI results.
-5. Use **Decision observability** to show how stable reason codes identify the failing stage
-   during an incident, then connect the three architectural risks to their controls.
+1. Open the storefront and the flow inspector side by side. Explain that the browser uses
+   REST for commands and feedback, while delivery arrives asynchronously over WebSocket.
+2. Close the welcome offer, add the $40 tee, and show the inspector recording
+   `CONDITION_FAILED` for `cmp-free-shipping` rather than silently doing nothing.
+3. Add the $75 hoodie. The cumulative $115 cart now qualifies: watch the animated line trace
+   the real hop-by-hop path (ingestion → campaigns DB → rules → decision → action sender →
+   realtime), and the free-shipping popup appears on the storefront.
+4. Point at the KPI row and campaign list — pause `cmp-vip-only` on/off live from the
+   dashboard to show campaign state is data, not a deploy.
+5. Connect each of the three architectural risks in the written answers (REST/WS race,
+   shared profile concurrency, delivery idempotency) to the exact node in the diagram where
+   it lives.
 
 This sequence demonstrates the core QA-manager decisions: observable outcomes rather than
 binary pass/fail, risk-based coverage, deterministic test identities, synchronous versus
