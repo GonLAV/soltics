@@ -106,13 +106,12 @@
     popup.setAttribute('data-campaign-id', campaignId || '');
     popup.setAttribute('data-delivery-id', deliveryId || '');
 
-    var dismiss = document.createElement('button');
-    dismiss.type = 'button';
-    dismiss.className = 'popup__dismiss';
-    dismiss.setAttribute('aria-label', 'Dismiss');
-    dismiss.innerHTML =
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-      'stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+    var content = document.createElement('div');
+    content.className = 'popup__content';
+
+    var eyebrow = document.createElement('p');
+    eyebrow.className = 'popup__eyebrow';
+    eyebrow.textContent = 'A little something for you';
 
     var heading = document.createElement('h2');
     heading.className = 'popup__title';
@@ -122,50 +121,34 @@
     description.className = 'popup__message';
     description.textContent = body;
 
+    var actions = document.createElement('div');
+    actions.className = 'popup__actions';
+
     var close = document.createElement('button');
     close.type = 'button';
-    close.className = 'btn btn--block';
     close.setAttribute('data-testid', 'popup-close');
     close.textContent = cta;
 
     var note = document.createElement('span');
     note.textContent = 'Applied automatically';
 
-    popup.innerHTML =
-      '<div class="popup__accent"></div>' +
-      '<div class="popup__frame">' +
-      '<div class="popup__icon">' +
-      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z"/></svg>' +
-      '</div>' +
-      '<div class="popup__body">' +
-      '<p class="popup__eyebrow">Just for you</p>' +
-      '</div>' +
-      '</div>' +
-      '<div class="popup__actions"></div>';
-
-    popup.insertBefore(dismiss, popup.firstChild);
-    popup.querySelector('.popup__body').appendChild(heading);
-    popup.querySelector('.popup__body').appendChild(description);
-    popup.querySelector('.popup__actions').appendChild(close);
-    popup.querySelector('.popup__actions').appendChild(note);
+    actions.appendChild(close);
+    actions.appendChild(note);
+    content.appendChild(eyebrow);
+    content.appendChild(heading);
+    content.appendChild(description);
+    content.appendChild(actions);
+    popup.appendChild(content);
     document.body.appendChild(popup);
 
     log('sdk', 'Rendered popup for ' + campaignId, { deliveryId: deliveryId });
     track('popup_displayed', { campaignId: campaignId, deliveryId: deliveryId });
 
-    function dismissPopup() {
-      if (popup.dataset.closing) return;
-      popup.dataset.closing = 'true';
-      popup.classList.add('popup--closing');
+    close.addEventListener('click', function () {
+      popup.remove();
       log('sdk', 'Popup closed by user');
       track('popup_closed', { campaignId: campaignId, deliveryId: deliveryId });
-      setTimeout(function () {
-        popup.remove();
-      }, 220);
-    }
-
-    close.addEventListener('click', dismissPopup);
-    dismiss.addEventListener('click', dismissPopup);
+    });
 
     document.dispatchEvent(
       new CustomEvent('solitics:popup', { detail: { campaignId: campaignId, deliveryId: deliveryId } })
