@@ -525,6 +525,53 @@
     if (element) element.textContent = value;
   }
 
+  function renderDecisionSummary(summary) {
+    var reasons = summary.byDecisionReason || {};
+    var total = Object.keys(reasons).reduce(function (sum, key) {
+      return sum + reasons[key];
+    }, 0);
+    var triggered = reasons.ELIGIBLE || 0;
+    var blocked = Math.max(total - triggered, 0);
+
+    document.querySelector('[data-decision-total]').textContent = total.toLocaleString();
+    document.querySelector('[data-decision-triggered]').textContent = triggered.toLocaleString();
+    document.querySelector('[data-decision-blocked]').textContent = blocked.toLocaleString();
+
+    var labels = {
+      ELIGIBLE: 'Qualified',
+      AUDIENCE_MISMATCH: 'Audience mismatch',
+      CONDITION_FAILED: 'Condition failed',
+      FREQUENCY_CAP: 'Frequency cap',
+      TRIGGER_MISMATCH: 'Trigger mismatch',
+      INVALID_CONDITION: 'Invalid condition',
+    };
+    var order = [
+      'ELIGIBLE',
+      'AUDIENCE_MISMATCH',
+      'CONDITION_FAILED',
+      'FREQUENCY_CAP',
+      'TRIGGER_MISMATCH',
+      'INVALID_CONDITION',
+    ];
+    var host = document.querySelector('[data-reason-list]');
+    var populated = order.filter(function (reason) { return reasons[reason]; });
+
+    if (!populated.length) {
+      host.innerHTML =
+        '<div class="reason-empty">Run a shopper journey or synthetic check to populate decision evidence.</div>';
+      return;
+    }
+
+    host.innerHTML = populated.map(function (reason) {
+      var count = reasons[reason];
+      var width = total ? Math.max(5, Math.round((count / total) * 100)) : 0;
+      return '<div class="reason-row">' +
+        '<div><span><i class="reason-dot reason-dot--' + reason.toLowerCase() + '"></i>' +
+        escapeHtml(labels[reason] || reason) + '</span><b>' + count + '</b></div>' +
+        '<div class="reason-track"><i style="width:' + width + '%"></i></div></div>';
+    }).join('');
+  }
+
   function refreshPanels() {
     Promise.all([
       fetch('/api/v1/campaigns').then(function (r) { return r.json(); }),
@@ -544,6 +591,10 @@
       setMetric('delivered', delivered.toLocaleString());
       setMetric('profiles', healthData.profiles.toLocaleString());
       setMetric('delivery-rate', rate + '%');
+      renderDecisionSummary(analyticsData.summary);
+
+      var metricBar = document.querySelector('[data-metric-bar]');
+      if (metricBar) metricBar.style.width = Math.min(rate, 100) + '%';
     });
   }
 
@@ -624,6 +675,191 @@
   document.querySelectorAll('.sidebar-link').forEach(function (link) {
     link.addEventListener('click', function () {
       document.body.classList.remove('sidebar-open');
+    });
+  });
+
+  function postJson(url, body) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(function (response) {
+      return response.json().then(function (json) {
+        if (!response.ok) throw new Error(json.error || 'Request failed');
+        return json;
+      });
+    });
+  }
+
+  function initProbe(testUser) {
+    var body = { userId: 'synthetic-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7) };
+    if (testUser) body.testUser = testUser;
+    return postJson('/api/v1/sdk/init', body);
+  }
+
+  function sendProbeEvent(sessionId, name, properties) {
+    return postJson('/api/v1/events', {
+      sessionId: sessionId,
+      event: { name: name, properties: properties || {}, timestamp: Date.now() },
+    }).then(function (response) { return response.results[0]; });
+  }
+
+  function decisionFor(result, campaignId) {
+    return result.decisions.find(function (decision) {
+      return decision.campaignId === campaignId;
+    });
+  }
+
+  function connectProbe(sessionId) {
+    return new Promise(function (resolve, reject) {
+      var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      var socket = new WebSocket(
+        protocol + '//' + window.location.host + '/ws?sessionId=' + encodeURIComponent(sessionId)
+      );
+      var timer = setTimeout(function () {
+        socket.close();
+        reject(new Error('WebSocket handshake exceeded 3 seconds'));
+      }, 3000);
+
+      socket.addEventListener('message', function onMessage(event) {
+        var message = JSON.parse(event.data);
+        if (message.type === 'connected') {
+          clearTimeout(timer);
+          socket.removeEventListener('message', onMessage);
+          resolve(socket);
+        }
+      });
+      socket.addEventListener('error', function () {
+        clearTimeout(timer);
+        reject(new Error('WebSocket connection failed'));
+      }, { once: true });
+    });
+  }
+
+  function nextAction(socket) {
+    return new Promise(function (resolve, reject) {
+      var timer = setTimeout(function () {
+        reject(new Error('No campaign action received within 3 seconds'));
+      }, 3000);
+      socket.addEventListener('message', function onMessage(event) {
+        var message = JSON.parse(event.data);
+        if (message.type !== 'action') return;
+        clearTimeout(timer);
+        socket.removeEventListener('message', onMessage);
+        resolve(message);
+      });
+    });
+  }
+
+  function requireDecision(result, campaignId, reasonCode) {
+    var decision = decisionFor(result, campaignId);
+    if (!decision || decision.reasonCode !== reasonCode) {
+      throw new Error(
+        'Expected ' + campaignId + ' to return ' + reasonCode +
+        ', received ' + (decision ? decision.reasonCode : 'no decision')
+      );
+    }
+    return decision;
+  }
+
+  async function runScenario(name) {
+    if (name === 'delivery') {
+      var deliverySession = await initProbe();
+      var socket = await connectProbe(deliverySession.sessionId);
+      var actionPromise = nextAction(socket);
+      var deliveryResult = await sendProbeEvent(deliverySession.sessionId, 'page_view');
+      var deliveryDecision = requireDecision(deliveryResult, 'cmp-20-off', 'ELIGIBLE');
+      var action = await actionPromise;
+      socket.close();
+      return {
+        title: 'End-to-end delivery passed',
+        detail: deliveryDecision.reasonCode + ' -> WebSocket action ' + action.deliveryId.slice(0, 8),
+      };
+    }
+
+    if (name === 'audience') {
+      var audienceSession = await initProbe('non-eligible');
+      var audienceResult = await sendProbeEvent(audienceSession.sessionId, 'page_view');
+      var audienceDecision = requireDecision(
+        audienceResult,
+        'cmp-20-off',
+        'AUDIENCE_MISMATCH'
+      );
+      return {
+        title: 'Audience isolation passed',
+        detail: audienceDecision.reason,
+      };
+    }
+
+    if (name === 'frequency') {
+      var frequencySession = await initProbe();
+      await sendProbeEvent(frequencySession.sessionId, 'page_view');
+      var repeated = await sendProbeEvent(frequencySession.sessionId, 'page_view');
+      var frequencyDecision = requireDecision(repeated, 'cmp-20-off', 'FREQUENCY_CAP');
+      return {
+        title: 'Frequency cap passed',
+        detail: frequencyDecision.reason,
+      };
+    }
+
+    if (name === 'threshold') {
+      var thresholdSession = await initProbe();
+      var below = await sendProbeEvent(thresholdSession.sessionId, 'add_to_cart', { price: 40 });
+      requireDecision(below, 'cmp-free-shipping', 'CONDITION_FAILED');
+      var above = await sendProbeEvent(thresholdSession.sessionId, 'add_to_cart', { price: 75 });
+      var thresholdDecision = requireDecision(above, 'cmp-free-shipping', 'ELIGIBLE');
+      return {
+        title: 'Behavioral threshold passed',
+        detail: '$40 rejected; cumulative $115 returned ' + thresholdDecision.reasonCode,
+      };
+    }
+
+    throw new Error('Unknown synthetic scenario');
+  }
+
+  var scenarioButtons = Array.from(document.querySelectorAll('[data-scenario]'));
+  scenarioButtons.forEach(function (button) {
+    button.addEventListener('click', function () {
+      var name = button.getAttribute('data-scenario');
+      var state = document.querySelector('[data-scenario-state="' + name + '"]');
+      var summary = document.querySelector('[data-probe-summary]');
+      var result = document.querySelector('[data-probe-result]');
+
+      scenarioButtons.forEach(function (item) { item.disabled = true; });
+      state.className = 'scenario-state is-running';
+      state.textContent = 'Running...';
+      summary.className = 'probe-status is-running';
+      summary.textContent = 'Checking';
+
+      runScenario(name)
+        .then(function (outcome) {
+          state.className = 'scenario-state is-passed';
+          state.textContent = 'Passed';
+          summary.className = 'probe-status is-passed';
+          summary.textContent = 'Last check passed';
+          result.className = 'probe-result is-passed';
+          result.hidden = false;
+          result.querySelector('[data-probe-title]').textContent = outcome.title;
+          result.querySelector('[data-probe-detail]').textContent = outcome.detail;
+          result.querySelector('[data-probe-time]').textContent =
+            new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          refreshPanels();
+        })
+        .catch(function (error) {
+          state.className = 'scenario-state is-failed';
+          state.textContent = 'Failed';
+          summary.className = 'probe-status is-failed';
+          summary.textContent = 'Attention needed';
+          result.className = 'probe-result is-failed';
+          result.hidden = false;
+          result.querySelector('[data-probe-title]').textContent = 'Check failed';
+          result.querySelector('[data-probe-detail]').textContent = error.message;
+          result.querySelector('[data-probe-time]').textContent =
+            new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        })
+        .finally(function () {
+          scenarioButtons.forEach(function (item) { item.disabled = false; });
+        });
     });
   });
 
