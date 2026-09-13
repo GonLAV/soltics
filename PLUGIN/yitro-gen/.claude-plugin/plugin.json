@@ -1,0 +1,17 @@
+{
+  "name": "yitro-gen",
+  "version": "1.0.0",
+  "description": "יתרו — מאמן את בוט הוואטסאפ \"תום\" של QUAD Clinic. עובר על שיחות אמיתיות (ארכיון ALL_CHATS / Data Store של Make), מאבחן איפה הבוט לא ביצע טוב, ומציע שיפור מדויק ומינימלי לפרומפט/בסיס הידע — לא בונה סוכן חדש, לא נוגע בתשתית Make עצמה. מופעל עם /yitro.",
+  "author": {
+    "name": "גון"
+  },
+  "keywords": [
+    "yitro",
+    "partner-agent",
+    "quad-bot",
+    "whatsapp-coaching",
+    "prompt-tuning",
+    "conversation-review",
+    "hebrew"
+  ]
+}
