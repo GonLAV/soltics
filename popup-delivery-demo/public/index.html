@@ -7,48 +7,59 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>Customer Website (mock)</h1>
-      <p class="sub">
-        This page stands in for a Solitics customer site. It loads the mock SDK, which
-        registers over REST, opens a WebSocket, and renders popups pushed by the campaign engine.
-      </p>
-    </header>
-
-    <nav class="nav">
-      <a href="/">eligible user</a>
-      <a href="/?testUser=non-eligible">non-eligible user</a>
-      <a href="/?testScenario=duplicate-delivery">duplicate delivery</a>
-      <a href="/?testUser=vip">vip user</a>
-      <a href="/dashboard.html">flow inspector →</a>
-    </nav>
-
-    <div class="grid">
-      <section class="panel">
-        <h2>Shop — fires real events</h2>
-        <div id="products"></div>
-        <p class="sub note">
-          Cart total ≥ $100 triggers the free-shipping campaign.
-          Cart: <strong data-testid="cart-total">$0</strong>
-        </p>
-      </section>
-
-      <section class="panel">
-        <h2>SDK state</h2>
-        <dl class="kv">
-          <dt>User</dt><dd data-testid="sdk-user">—</dd>
-          <dt>Session</dt><dd data-testid="sdk-session">—</dd>
-          <dt>Segments</dt><dd data-testid="sdk-segments">—</dd>
-          <dt>WebSocket</dt><dd data-testid="sdk-ws">connecting…</dd>
-        </dl>
-        <p class="actions">
-          <button type="button" class="ghost" data-testid="reset-user">New user (clear id)</button>
-        </p>
-      </section>
+  <div class="page">
+    <div class="brand-bar">
+      <div class="brand-mark">S</div>
     </div>
+    <div class="wrap">
+      <div class="card">
+        <header>
+          <h1>Customer Website</h1>
+          <p class="sub">
+            This page stands in for a Solitics customer site. It loads the mock SDK, which
+            registers over REST, opens a WebSocket, and renders popups pushed by the campaign engine.
+          </p>
+        </header>
 
-    <div class="logbox" data-testid="sdk-log"></div>
+        <nav class="nav">
+          <a href="/">eligible user</a>
+          <a href="/?testUser=non-eligible">non-eligible user</a>
+          <a href="/?testScenario=duplicate-delivery">duplicate delivery</a>
+          <a href="/?testUser=vip">vip user</a>
+          <a href="/dashboard.html">flow inspector →</a>
+        </nav>
+
+        <div class="grid">
+          <section class="panel">
+            <h2>Shop — fires real events</h2>
+            <div id="products"></div>
+            <p class="sub note">
+              Cart total ≥ $100 triggers the free-shipping campaign.
+              Cart: <strong data-testid="cart-total">$0</strong>
+            </p>
+          </section>
+
+          <section class="panel">
+            <h2>SDK state</h2>
+            <dl class="kv">
+              <dt>User</dt><dd data-testid="sdk-user">—</dd>
+              <dt>Session</dt><dd data-testid="sdk-session">—</dd>
+              <dt>Segments</dt><dd data-testid="sdk-segments">—</dd>
+              <dt>WebSocket</dt><dd data-testid="sdk-ws">connecting…</dd>
+            </dl>
+            <p class="actions">
+              <button type="button" class="ghost" data-testid="reset-user">New user (clear id)</button>
+            </p>
+          </section>
+        </div>
+
+        <div class="logbox" data-testid="sdk-log"></div>
+      </div>
+
+      <div class="footer">
+        By continuing, you agree to the <a href="#">Terms</a> and <a href="#">Privacy Policy</a>.
+      </div>
+    </div>
   </div>
 
   <script src="solitics-sdk.js"></script>
