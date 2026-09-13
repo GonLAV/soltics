@@ -385,12 +385,18 @@
         list.innerHTML = '';
 
         var started = Date.now();
-        summary.textContent = 'running against this app… 0s';
+        var label = button.innerHTML;
+        button.textContent = 'Running… 0s';
+        summary.textContent = 'running against this app…';
+
         var ticker = setInterval(function () {
-          summary.textContent =
-            'running against this app… ' + Math.round((Date.now() - started) / 1000) + 's';
+          button.textContent = 'Running… ' + Math.round((Date.now() - started) / 1000) + 's';
         }, 250);
-        var stopTicker = function () { clearInterval(ticker); };
+
+        var stopTicker = function () {
+          clearInterval(ticker);
+          button.innerHTML = label;
+        };
 
         fetch('/api/v1/qa/run-contract', { method: 'POST' })
           .then(function (response) { return response.json(); })
@@ -497,13 +503,26 @@
 
           // A real browser run takes ten-odd seconds. Without a moving
           // counter the panel reads as hung, which is worse than the wait.
+          // The countdown has to be on the button that was pressed. In the
+          // summary line it was a 0.5rem caption in the corner, and fourteen
+          // seconds of greyed-out buttons with no visible progress reads as
+          // a hang however correct the run is.
           var started = Date.now();
-          summary.textContent = 'running ' + which + '… 0s';
+          var label = button.textContent;
+          button.classList.add('is-running');
+          button.textContent = 'Running… 0s';
+          summary.textContent = 'running ' + which + '…';
+
           var ticker = setInterval(function () {
-            summary.textContent =
-              'running ' + which + '… ' + Math.round((Date.now() - started) / 1000) + 's';
+            var s = Math.round((Date.now() - started) / 1000);
+            button.textContent = 'Running… ' + s + 's';
           }, 250);
-          var stopTicker = function () { clearInterval(ticker); };
+
+          var stopTicker = function () {
+            clearInterval(ticker);
+            button.classList.remove('is-running');
+            button.textContent = label;
+          };
 
           fetch('/api/v1/qa/code-review/' + which, { method: 'POST' })
             .then(function (r) { return r.json(); })

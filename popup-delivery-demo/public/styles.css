@@ -2525,3 +2525,28 @@ svg {
   font-weight: 700;
 }
 .reason-text { display: block; margin-top: 2px; color: #6a6a75; }
+
+/* A running test button must look alive, not merely disabled. */
+.cr-button.is-running,
+.contract-run-button.is-running {
+  position: relative;
+  overflow: hidden;
+}
+.cr-button.is-running::after,
+.contract-run-button.is-running::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    transparent 0%, rgba(246, 197, 68, .35) 50%, transparent 100%);
+  background-size: 220% 100%;
+  animation: runnerSweep 1.1s linear infinite;
+}
+@keyframes runnerSweep {
+  from { background-position: 120% 0; }
+  to { background-position: -120% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cr-button.is-running::after,
+  .contract-run-button.is-running::after { animation: none; }
+}
