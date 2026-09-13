@@ -93,3 +93,31 @@ test.describe('Behavioural targeting', () => {
       .toEqual(expect.arrayContaining(['popup_displayed', 'popup_closed']));
   });
 });
+
+test.describe('Quality command center', () => {
+  test('an audience isolation probe returns explainable decision evidence', async ({ page }) => {
+    await page.goto('/dashboard.html');
+
+    await page.locator('[data-scenario="audience"]').click();
+
+    await expect(page.locator('[data-scenario-state="audience"]')).toHaveText('Passed');
+    await expect(page.locator('[data-probe-title]')).toHaveText('Audience isolation passed');
+    await expect(page.locator('[data-probe-detail]')).toContainText('do not match audience');
+    await expect(page.locator('[data-decision-total]')).not.toHaveText('0');
+  });
+
+  test('the cart drawer reflects item state and shipping qualification', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('campaign-popup')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('popup-close').click();
+
+    await page.getByTestId('add-to-cart-tee-01').click();
+    await page.getByTestId('add-to-cart-hd-02').click();
+    await page.locator('[data-cart-open]').click();
+
+    await expect(page.locator('[data-cart-drawer]')).toHaveAttribute('aria-hidden', 'false');
+    await expect(page.locator('.drawer-item')).toHaveCount(2);
+    await expect(page.locator('[data-cart-subtotal]')).toHaveText('$115');
+    await expect(page.locator('[data-drawer-shipping]')).toContainText('unlocked');
+  });
+});

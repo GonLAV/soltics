@@ -61,6 +61,19 @@ function ingest(raw, session) {
   const decisions = decisionEngine.decide({ event, profile, session });
   const delivered = [];
 
+  for (const decision of decisions) {
+    analyticsDb.record('campaign_decision', {
+      campaignId: decision.campaignId,
+      userId: profile.userId,
+      sessionId: session.sessionId,
+      eventId: event.eventId,
+      eventName: event.name,
+      shouldTrigger: decision.shouldTrigger,
+      reasonCode: decision.reasonCode,
+      reason: decision.reason,
+    });
+  }
+
   for (const decision of decisions.filter((d) => d.shouldTrigger)) {
     const result = actionSender.send(decision, { profile, session, event });
     delivered.push({ campaignId: decision.campaignId, ...result });

@@ -100,15 +100,19 @@ const analyticsDb = {
   summary() {
     const byType = {};
     const byCampaign = {};
+    const byDecisionReason = {};
     for (const row of analytics) {
       byType[row.type] = (byType[row.type] || 0) + 1;
+      if (row.type === 'campaign_decision' && row.reasonCode) {
+        byDecisionReason[row.reasonCode] = (byDecisionReason[row.reasonCode] || 0) + 1;
+      }
       if (row.campaignId) {
         byCampaign[row.campaignId] = byCampaign[row.campaignId] || {};
         byCampaign[row.campaignId][row.type] =
           (byCampaign[row.campaignId][row.type] || 0) + 1;
       }
     }
-    return { total: analytics.length, byType, byCampaign };
+    return { total: analytics.length, byType, byCampaign, byDecisionReason };
   },
   clear() {
     analytics.length = 0;

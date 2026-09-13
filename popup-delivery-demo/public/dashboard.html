@@ -42,6 +42,10 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9m6 10V5m6 14v-7m4 7H2"/></svg>
         Analytics
       </a>
+      <a href="#quality" class="sidebar-link">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 7 3v5c0 4.6-2.8 8-7 10-4.2-2-7-5.4-7-10V6l7-3Zm-3 9 2 2 4-5"/></svg>
+        Quality center
+      </a>
     </nav>
 
     <div class="sidebar-bottom">
@@ -203,6 +207,91 @@
         </section>
       </div>
 
+      <section class="quality-section" id="quality">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Quality intelligence</span>
+            <h2>Release confidence, explained</h2>
+            <p>Executable checks and decision evidence for the highest-risk parts of the delivery path.</p>
+          </div>
+          <span class="quality-badge"><svg viewBox="0 0 24 24"><path d="m12 3 7 3v5c0 4.6-2.8 8-7 10-4.2-2-7-5.4-7-10V6l7-3Zm-3 9 2 2 4-5"/></svg> Risk-based coverage</span>
+        </div>
+
+        <div class="quality-grid">
+          <article class="quality-card scenario-card">
+            <div class="quality-card__heading">
+              <div><h3>Synthetic journey checks</h3><p>Run production-style probes against the real API and WebSocket path.</p></div>
+              <span class="probe-status" data-probe-summary>Ready</span>
+            </div>
+            <div class="scenario-list">
+              <button type="button" data-scenario="delivery">
+                <span class="scenario-icon scenario-icon--green"><svg viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></span>
+                <span><b>Happy-path delivery</b><small>REST decision + WebSocket action</small></span>
+                <span class="scenario-state" data-scenario-state="delivery">Run check</span>
+              </button>
+              <button type="button" data-scenario="audience">
+                <span class="scenario-icon scenario-icon--blue"><svg viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm-4-9h8M12 8v8"/></svg></span>
+                <span><b>Audience isolation</b><small>Excluded users receive no action</small></span>
+                <span class="scenario-state" data-scenario-state="audience">Run check</span>
+              </button>
+              <button type="button" data-scenario="frequency">
+                <span class="scenario-icon scenario-icon--amber"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 2M3.1 12a9 9 0 1 0 2.6-6.3L3 8m0-5v5h5"/></svg></span>
+                <span><b>Frequency cap</b><small>Repeated events are suppressed</small></span>
+                <span class="scenario-state" data-scenario-state="frequency">Run check</span>
+              </button>
+              <button type="button" data-scenario="threshold">
+                <span class="scenario-icon scenario-icon--purple"><svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h16M7 15l4-4 3 2 5-6"/></svg></span>
+                <span><b>Behavioral threshold</b><small>$40 rejected, $115 qualifies</small></span>
+                <span class="scenario-state" data-scenario-state="threshold">Run check</span>
+              </button>
+            </div>
+            <div class="probe-result" data-probe-result hidden>
+              <span class="probe-result__icon"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span>
+              <div><b data-probe-title>Check passed</b><small data-probe-detail></small></div>
+              <time data-probe-time></time>
+            </div>
+          </article>
+
+          <article class="quality-card decisions-card">
+            <div class="quality-card__heading">
+              <div><h3>Decision observability</h3><p>Machine-readable outcomes expose where and why users leave the funnel.</p></div>
+              <span class="explainable-pill">Explainable</span>
+            </div>
+            <div class="decision-summary">
+              <div><strong data-decision-total>0</strong><span>Evaluations</span></div>
+              <div><strong data-decision-triggered>0</strong><span>Qualified</span></div>
+              <div><strong data-decision-blocked>0</strong><span>Suppressed</span></div>
+            </div>
+            <div class="reason-list" data-reason-list>
+              <div class="reason-empty">Run a shopper journey or synthetic check to populate decision evidence.</div>
+            </div>
+          </article>
+        </div>
+
+        <article class="risk-card">
+          <div class="risk-card__intro">
+            <span class="eyebrow">Top architectural risks</span>
+            <h3>Controls mapped to failure modes</h3>
+            <p>The demo makes each control observable and independently testable.</p>
+          </div>
+          <div class="risk-control">
+            <span class="risk-number">01</span>
+            <div><b>REST / WebSocket race</b><small>Queue before connect, then verify delivery on the async channel.</small></div>
+            <span class="control-chip">Synthetic probe</span>
+          </div>
+          <div class="risk-control">
+            <span class="risk-number">02</span>
+            <div><b>Duplicate delivery</b><small>Delivery IDs make SDK rendering idempotent under at-least-once transport.</small></div>
+            <span class="control-chip">Contract test</span>
+          </div>
+          <div class="risk-control">
+            <span class="risk-number">03</span>
+            <div><b>Targeting regression</b><small>Reason codes separate audience, condition, and frequency failures.</small></div>
+            <span class="control-chip">Decision telemetry</span>
+          </div>
+        </article>
+      </section>
+
       <footer class="admin-footer">
         <span>Pulseboard demo environment</span>
         <span><i class="status-dot"></i> All systems operational</span>
@@ -233,6 +322,10 @@
         <a href="#analytics" data-command-item data-search="analytics events metrics delivery rate">
           <span class="command-result-icon"><svg viewBox="0 0 24 24"><path d="M4 19V9m6 10V5m6 14v-7m4 7H2"/></svg></span>
           <span><b>Analytics</b><small>Review live performance</small></span><kbd>G A</kbd>
+        </a>
+        <a href="#quality" data-command-item data-search="quality release confidence tests risks diagnostics">
+          <span class="command-result-icon"><svg viewBox="0 0 24 24"><path d="m12 3 7 3v5c0 4.6-2.8 8-7 10-4.2-2-7-5.4-7-10V6l7-3Zm-3 9 2 2 4-5"/></svg></span>
+          <span><b>Quality center</b><small>Run synthetic checks and inspect decisions</small></span><kbd>G Q</kbd>
         </a>
         <a href="/" target="_blank" data-command-item data-search="storefront customer shop open">
           <span class="command-result-icon"><svg viewBox="0 0 24 24"><path d="M5 7h14l-1 13H6L5 7Zm3 0a4 4 0 0 1 8 0"/></svg></span>

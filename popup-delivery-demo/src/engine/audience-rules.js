@@ -23,7 +23,9 @@ function resolve(path, context) {
 
 function matchesAudience(campaign, profile) {
   const wanted = campaign.audience?.segments || [];
-  if (wanted.length === 0) return { matched: true, reason: 'audience is everyone' };
+  if (wanted.length === 0) {
+    return { matched: true, reasonCode: 'ELIGIBLE', reason: 'audience is everyone' };
+  }
 
   const held = profile.segments || [];
   const overlap = wanted.filter((segment) => held.includes(segment));
@@ -32,6 +34,7 @@ function matchesAudience(campaign, profile) {
 
   return {
     matched,
+    reasonCode: matched ? 'ELIGIBLE' : 'AUDIENCE_MISMATCH',
     reason: matched
       ? `segment match on [${overlap.join(', ')}]`
       : `user segments [${held.join(', ')}] do not match audience [${wanted.join(', ')}]`,
@@ -44,35 +47,48 @@ function matchesConditions(campaign, context) {
     const actual = resolve(condition.field, context);
     const operator = OPERATORS[condition.op];
     if (!operator) {
-      return { matched: false, reason: `unknown operator "${condition.op}"` };
+      return {
+        matched: false,
+        reasonCode: 'INVALID_CONDITION',
+        reason: `unknown operator "${condition.op}"`,
+      };
     }
     if (!operator(actual, condition.value)) {
       return {
         matched: false,
+        reasonCode: 'CONDITION_FAILED',
         reason: `condition failed: ${condition.field} (${JSON.stringify(actual)}) ${condition.op} ${JSON.stringify(condition.value)}`,
       };
     }
   }
-  return { matched: true, reason: `${conditions.length} condition(s) passed` };
+  return {
+    matched: true,
+    reasonCode: 'ELIGIBLE',
+    reason: `${conditions.length} condition(s) passed`,
+  };
 }
 
 function evaluate(campaign, context) {
   const audience = matchesAudience(campaign, context.profile);
   if (!audience.matched) {
     bus.trace('rules', `${campaign.id}: audience miss`, { reason: audience.reason });
-    return { matched: false, reason: audience.reason };
+    return { matched: false, reasonCode: audience.reasonCode, reason: audience.reason };
   }
 
   const conditions = matchesConditions(campaign, context);
   if (!conditions.matched) {
     bus.trace('rules', `${campaign.id}: condition miss`, { reason: conditions.reason });
-    return { matched: false, reason: conditions.reason };
+    return { matched: false, reasonCode: conditions.reasonCode, reason: conditions.reason };
   }
 
   bus.trace('rules', `${campaign.id}: audience + conditions OK`, {
     reason: audience.reason,
   });
-  return { matched: true, reason: `${audience.reason}; ${conditions.reason}` };
+  return {
+    matched: true,
+    reasonCode: 'ELIGIBLE',
+    reason: `${audience.reason}; ${conditions.reason}`,
+  };
 }
 
 module.exports = { evaluate, matchesAudience, matchesConditions, resolve, OPERATORS };
