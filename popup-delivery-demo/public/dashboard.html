@@ -8,6 +8,97 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <div class="page">
+    <div class="brand-bar">
+      <div class="brand-mark">S</div>
+    </div>
+    <div class="wrap">
+      <div class="card">
+        <header>
+          <h1>Flow Inspector</h1>
+          <p class="sub">
+            Live trace of every hop. Trigger a scenario below and watch the request walk through
+            API → Ingestion → Profile → Rules → Decision → Action Sender → Real-time Server → popup.
+          </p>
+        </header>
+
+        <nav class="nav">
+          <a href="/">← customer website</a>
+          <a href="/qa-assignment.html">QA assignment →</a>
+          <a href="#" data-testid="reset-state">reset backend state</a>
+          <span class="ws-status" data-testid="ws-status">
+            <span class="ws-status__dot"></span>
+            <span class="ws-status__text">connecting…</span>
+          </span>
+        </nav>
+
+        <!-- Scenario triggers -->
+        <div class="scenarios">
+          <div class="scenarios__label">Trigger a scenario</div>
+          <div class="scenarios__buttons">
+            <button type="button" class="scenario-btn" data-scenario="eligible">
+              <span class="scenario-btn__icon">✓</span>
+              <span>Eligible user → popup</span>
+            </button>
+            <button type="button" class="scenario-btn" data-scenario="non-eligible">
+              <span class="scenario-btn__icon">✕</span>
+              <span>Non-eligible → no popup</span>
+            </button>
+            <button type="button" class="scenario-btn" data-scenario="duplicate">
+              <span class="scenario-btn__icon">⏚</span>
+              <span>Duplicate delivery → de-dup</span>
+            </button>
+            <button type="button" class="scenario-btn" data-scenario="cart">
+              <span class="scenario-btn__icon">$</span>
+              <span>Cart ≥ $100 → free shipping</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Flow diagram -->
+        <div class="flow">
+          <div class="col col--client" data-col="client"><h3>Client Browser</h3></div>
+          <div class="col" data-col="backend"><h3>Solitics Backend</h3></div>
+          <div class="col" data-col="engine"><h3>Campaign Engine</h3></div>
+          <div class="col" data-col="stores"><h3>Data Stores</h3></div>
+        </div>
+
+        <!-- Decision detail + Reason distribution -->
+        <div class="grid">
+          <section class="panel">
+            <h2>Latest Decision</h2>
+            <div data-testid="decision-detail">
+              <div class="decision-empty">No events yet — trigger a scenario to see decisions.</div>
+            </div>
+          </section>
+          <section class="panel">
+            <h2>Decision Reason Distribution</h2>
+            <div data-testid="reason-distribution">
+              <div class="decision-empty">No decisions evaluated yet.</div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Campaigns + Analytics -->
+        <div class="grid">
+          <section class="panel">
+            <h2>Campaigns</h2>
+            <div data-testid="campaign-list"></div>
+          </section>
+          <section class="panel">
+            <h2>Analytics</h2>
+            <div class="stats" data-testid="analytics"></div>
+          </section>
+        </div>
+
+        <!-- Trace log -->
+        <div class="logbox" data-testid="trace-log"></div>
+      </div>
+
+      <div class="footer">
+        By continuing, you agree to the <a href="#">Terms</a> and <a href="#">Privacy Policy</a>.
+      </div>
+    </div>
   <header class="topbar">
     <div class="topbar__inner">
       <a class="brand" href="/dashboard.html"><span class="brand__mark">N</span>Flow Inspector</a>
