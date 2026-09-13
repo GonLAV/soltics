@@ -3,23 +3,25 @@
  * /ws/inspector and maps each entry onto the architecture diagram, the
  * activity feed and the KPI row. Purely observability — nothing here
  * feeds back into the delivery path.
+ * Live journey dashboard. It maps backend trace events to the visual
+ * orchestration stages while keeping campaign and KPI data in sync.
  */
 (function () {
   'use strict';
 
   var NODE_META = {
     sdk: { label: 'Storefront SDK', icon: 'cursor' },
-    api: { label: 'API layer', icon: 'brackets' },
+    api: { label: 'API gateway', icon: 'brackets' },
     ingestion: { label: 'Event ingestion', icon: 'inbox' },
-    profile: { label: 'Profile & segmentation', icon: 'user' },
-    realtime: { label: 'Real-time server', icon: 'signal' },
+    profile: { label: 'Profile builder', icon: 'user' },
+    realtime: { label: 'Realtime socket', icon: 'signal' },
     'campaign-manager': { label: 'Campaign manager', icon: 'campaign' },
-    rules: { label: 'Audience & rules', icon: 'filter' },
+    rules: { label: 'Audience rules', icon: 'filter' },
     decision: { label: 'Decision engine', icon: 'spark' },
-    'action-sender': { label: 'Action sender', icon: 'send' },
-    'campaigns-db': { label: 'Campaigns DB', icon: 'database' },
-    'profiles-db': { label: 'User profiles DB', icon: 'database' },
-    'analytics-db': { label: 'Analytics DB', icon: 'database' },
+    'action-sender': { label: 'Action delivery', icon: 'send' },
+    'campaigns-db': { label: 'Campaigns', icon: 'database' },
+    'profiles-db': { label: 'Profiles', icon: 'database' },
+    'analytics-db': { label: 'Analytics', icon: 'database' },
   };
 
   var LAYOUT = {
@@ -40,18 +42,12 @@
     spark: '<path d="m13 2-8 11h7l-1 9 8-11h-7l1-9Z"/>',
     send: '<path d="m3 11 18-8-8 18-2-8-8-2Zm8 2 4-4"/>',
     database: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
-    cart: '<circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M3 4h2l2.4 11h10.8l2-7H6"/>',
-    star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2-5.5-2.9-5.5 2.9 1-6.2L3 9.6l6.2-.9L12 3Z"/>',
-    tag: '<path d="M20 13 13 20 4 11V4h7l9 9ZM8.5 8.5h.01"/>',
   };
-
-  // Heuristic only — the trace bus carries no severity field, so a node is
-  // flagged "warn" when its own message reads like a rejection. Presentation
-  // only; nothing here feeds back into the delivery path.
-  var WARN_PATTERN = /reject|declin|miss|error|fail|invalid/i;
 
   var nodes = {};
   var timers = {};
+  var recentEntries = [];
+  var refreshTimer = null;
   var logbox = document.querySelector('[data-testid="trace-log"]');
   var emptyState = document.querySelector('[data-empty-state]');
   var overlay = document.querySelector('.flow__overlay');
@@ -69,7 +65,7 @@
   }
 
   function icon(name) {
-    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || ICONS.spark) + '</svg>';
+    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>';
   }
 
   function buildDiagram() {
@@ -78,7 +74,7 @@
       LAYOUT[column].forEach(function (id) {
         var meta = NODE_META[id];
         var box = document.createElement('div');
-        box.className = 'node';
+        box.className = 'journey-node';
         box.setAttribute('data-node', id);
         box.innerHTML =
           '<div class="node__head">' +
@@ -87,6 +83,9 @@
           '<span class="node__time"></span>' +
           '</div>' +
           '<div class="node__meta">Ready</div>';
+          '<span class="node-icon">' + icon(meta.icon) + '</span>' +
+          '<span class="node-copy"><b>' + meta.label + '</b><small class="last">Ready</small></span>' +
+          '<span class="node-state"></span>';
         host.appendChild(box);
         nodes[id] = box;
       });
@@ -169,21 +168,39 @@
 
     var meta = NODE_META[entry.node] || { label: entry.node };
     var isWarn = WARN_PATTERN.test(entry.message);
+    box.classList.add('is-active');
+    box.querySelector('.last').textContent = entry.message;
+
+    clearTimeout(timers[entry.node]);
+    timers[entry.node] = setTimeout(function () {
+      box.classList.remove('is-active');
+      box.classList.add('is-complete');
+    }, 850);
+    setTimeout(function () {
+      box.classList.remove('is-complete');
+    }, 4000);
+  }
+
+  function appendLog(entry) {
+    if (emptyState && emptyState.parentNode) emptyState.remove();
+    recentEntries.unshift(entry);
+    recentEntries = recentEntries.slice(0, 50);
+
+    var line = document.createElement('div');
     var time = new Date(entry.at).toLocaleTimeString([], {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
     });
-
-    var row = document.createElement('div');
-    row.className = 'activity-row' + (isWarn ? ' is-warn' : '');
-    row.innerHTML =
-      '<span class="node-tag">' + escapeHtml(meta.label) + '</span>' +
-      '<span class="msg">' + escapeHtml(entry.message) + '</span>' +
+    var meta = NODE_META[entry.node] || { label: entry.node, icon: 'spark' };
+    line.className = 'activity-row';
+    line.innerHTML =
+      '<span class="activity-icon">' + icon(meta.icon) + '</span>' +
+      '<span class="activity-copy"><b>' + escapeHtml(meta.label) + '</b>' +
+      '<small>' + escapeHtml(entry.message) + '</small></span>' +
       '<time>' + time + '</time>';
-
-    logbox.insertBefore(row, logbox.firstChild);
-    while (logbox.childElementCount > 60) logbox.removeChild(logbox.lastChild);
+    logbox.insertBefore(line, logbox.firstChild);
+    while (logbox.childElementCount > 50) logbox.removeChild(logbox.lastChild);
 
     var lastEvent = document.querySelector('[data-last-event]');
     if (lastEvent) lastEvent.textContent = 'Updated just now';
@@ -218,6 +235,10 @@
   function enqueueTrace(entry) {
     playQueue.push(entry);
     if (!playing) { playing = true; playNext(); }
+    var status = document.querySelector('[data-connection-state]');
+    if (!status) return;
+    status.classList.toggle('is-connected', connected);
+    status.innerHTML = '<i></i>' + (connected ? 'Live' : 'Reconnecting');
   }
 
   function connect() {
@@ -233,11 +254,15 @@
 
       if (message.type === 'backlog') {
         message.entries.slice(-15).forEach(appendLog);
+        message.entries.slice(-12).forEach(appendLog);
         return;
       }
 
       if (message.type === 'trace') {
         enqueueTrace(message.entry);
+        pulse(message.entry);
+        appendLog(message.entry);
+        refreshPanelsSoon();
       }
     });
 
@@ -247,7 +272,6 @@
     });
   }
 
-  var refreshTimer = null;
   function refreshPanelsSoon() {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(refreshPanels, 250);
@@ -259,47 +283,53 @@
     return 'tag';
   }
 
+  function campaignIconSvg(name) {
+    var paths = {
+      cart: '<circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M3 4h2l2.4 11h10.8l2-7H6"/>',
+      star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2-5.5-2.9-5.5 2.9 1-6.2L3 9.6l6.2-.9L12 3Z"/>',
+      tag: '<path d="M20 13 13 20 4 11V4h7l9 9ZM8.5 8.5h.01"/>',
+    };
+    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths[name] + '</svg>';
+  }
+
   function renderCampaigns(campaigns) {
     var host = document.querySelector('[data-testid="campaign-list"]');
+    var count = document.querySelector('[data-testid="campaign-count"]');
     host.innerHTML = '';
+    count.textContent = campaigns.length;
 
     campaigns.forEach(function (campaign) {
-      var segment = campaign.audience.segments.join(', ') || 'All visitors';
-      var trigger = campaign.trigger.event.replace(/_/g, ' ');
-      var isActive = campaign.status === 'active';
-
       var row = document.createElement('div');
       row.className = 'campaign-row';
       row.setAttribute('data-campaign-row', campaign.id);
+
+      var segment = campaign.audience.segments.join(', ') || 'All visitors';
+      var trigger = campaign.trigger.event.replace(/_/g, ' ');
       row.innerHTML =
-        '<div>' +
-        '<div class="campaign-row__name">' + icon(campaignIcon(campaign)) + escapeHtml(campaign.name) + '</div>' +
-        '<div class="campaign-row__meta">on ' + escapeHtml(trigger) + ' → [' + escapeHtml(segment) + ']</div>' +
-        '</div>';
-
-      var right = document.createElement('div');
-      right.className = 'campaign-row__right';
-
-      var badge = document.createElement('span');
-      badge.className = 'badge' + (isActive ? ' active' : ' paused');
-      badge.textContent = campaign.status;
+        '<span class="campaign-icon campaign-icon--' + campaignIcon(campaign) + '">' +
+        campaignIconSvg(campaignIcon(campaign)) + '</span>' +
+        '<span class="campaign-copy"><b>' + escapeHtml(campaign.name) + '</b>' +
+        '<small>When ' + escapeHtml(trigger) + ' · ' + escapeHtml(segment) + '</small></span>' +
+        '<span class="campaign-status ' + (campaign.status === 'active' ? 'is-active' : '') + '">' +
+        '<i></i>' + escapeHtml(campaign.status) + '</span>';
 
       var toggle = document.createElement('button');
+      toggle.className = 'campaign-action';
       toggle.type = 'button';
-      toggle.className = 'btn btn--ghost btn--sm';
-      toggle.textContent = isActive ? 'Pause' : 'Activate';
+      toggle.setAttribute('aria-label', (campaign.status === 'active' ? 'Pause ' : 'Activate ') + campaign.name);
+      toggle.textContent = campaign.status === 'active' ? 'Pause' : 'Activate';
       toggle.addEventListener('click', function () {
         toggle.disabled = true;
         fetch('/api/v1/campaigns/' + campaign.id + '/status', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: isActive ? 'paused' : 'active' }),
+          body: JSON.stringify({
+            status: campaign.status === 'active' ? 'paused' : 'active',
+          }),
         }).then(refreshPanels);
       });
 
-      right.appendChild(badge);
-      right.appendChild(toggle);
-      row.appendChild(right);
+      row.appendChild(toggle);
       host.appendChild(row);
     });
   }
@@ -311,9 +341,9 @@
 
   function refreshPanels() {
     Promise.all([
-      fetch('/api/v1/campaigns').then(function (r) { return r.json(); }),
-      fetch('/api/v1/analytics?limit=1').then(function (r) { return r.json(); }),
-      fetch('/api/v1/health').then(function (r) { return r.json(); }),
+      fetch('/api/v1/campaigns').then(function (response) { return response.json(); }),
+      fetch('/api/v1/analytics?limit=200').then(function (response) { return response.json(); }),
+      fetch('/api/v1/health').then(function (response) { return response.json(); }),
     ]).then(function (results) {
       var campaignData = results[0];
       var analyticsData = results[1];
@@ -334,22 +364,301 @@
   function showToast() {
     var toast = document.querySelector('[data-toast]');
     toast.classList.add('is-visible');
-    setTimeout(function () { toast.classList.remove('is-visible'); }, 2600);
+    setTimeout(function () {
+      toast.classList.remove('is-visible');
+    }, 2600);
   }
 
   document.querySelector('[data-testid="reset-state"]').addEventListener('click', function () {
     fetch('/api/v1/admin/reset', { method: 'POST' }).then(function () {
+      recentEntries = [];
       logbox.innerHTML =
         '<div class="activity-empty" data-empty-state>' +
         '<span><svg viewBox="0 0 24 24"><path d="M4 17h3l2-10 4 14 2-9 2 5h3"/></svg></span>' +
         '<b>Your live events will appear here</b>' +
         '<small>Open the storefront and add a product to begin.</small></div>';
       emptyState = document.querySelector('[data-empty-state]');
-      var lastEvent = document.querySelector('[data-last-event]');
-      if (lastEvent) lastEvent.textContent = 'Waiting for an event';
+      document.querySelector('[data-last-event]').textContent = 'Waiting for an event';
       showToast();
       refreshPanels();
     });
+  });
+
+  document.querySelector('.mobile-menu').addEventListener('click', function () {
+    document.body.classList.toggle('sidebar-open');
+  });
+
+  document.querySelector('[data-sidebar-close]').addEventListener('click', function () {
+    document.body.classList.remove('sidebar-open');
+  });
+
+  document.querySelectorAll('.sidebar-link').forEach(function (link) {
+    link.addEventListener('click', function () {
+      document.body.classList.remove('sidebar-open');
+    });
+  });
+
+  function postJson(url, body) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(function (response) {
+      return response.json().then(function (json) {
+        if (!response.ok) throw new Error(json.error || 'Request failed');
+        return json;
+      });
+    });
+  }
+
+  function initProbe(testUser) {
+    var body = { userId: 'synthetic-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7) };
+    if (testUser) body.testUser = testUser;
+    return postJson('/api/v1/sdk/init', body);
+  }
+
+  function sendProbeEvent(sessionId, name, properties) {
+    return postJson('/api/v1/events', {
+      sessionId: sessionId,
+      event: { name: name, properties: properties || {}, timestamp: Date.now() },
+    }).then(function (response) { return response.results[0]; });
+  }
+
+  function decisionFor(result, campaignId) {
+    return result.decisions.find(function (decision) {
+      return decision.campaignId === campaignId;
+    });
+  }
+
+  function connectProbe(sessionId) {
+    return new Promise(function (resolve, reject) {
+      var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      var socket = new WebSocket(
+        protocol + '//' + window.location.host + '/ws?sessionId=' + encodeURIComponent(sessionId)
+      );
+      var timer = setTimeout(function () {
+        socket.close();
+        reject(new Error('WebSocket handshake exceeded 3 seconds'));
+      }, 3000);
+
+      socket.addEventListener('message', function onMessage(event) {
+        var message = JSON.parse(event.data);
+        if (message.type === 'connected') {
+          clearTimeout(timer);
+          socket.removeEventListener('message', onMessage);
+          resolve(socket);
+        }
+      });
+      socket.addEventListener('error', function () {
+        clearTimeout(timer);
+        reject(new Error('WebSocket connection failed'));
+      }, { once: true });
+    });
+  }
+
+  function nextAction(socket) {
+    return new Promise(function (resolve, reject) {
+      var timer = setTimeout(function () {
+        reject(new Error('No campaign action received within 3 seconds'));
+      }, 3000);
+      socket.addEventListener('message', function onMessage(event) {
+        var message = JSON.parse(event.data);
+        if (message.type !== 'action') return;
+        clearTimeout(timer);
+        socket.removeEventListener('message', onMessage);
+        resolve(message);
+      });
+    });
+  }
+
+  function requireDecision(result, campaignId, reasonCode) {
+    var decision = decisionFor(result, campaignId);
+    if (!decision || decision.reasonCode !== reasonCode) {
+      throw new Error(
+        'Expected ' + campaignId + ' to return ' + reasonCode +
+        ', received ' + (decision ? decision.reasonCode : 'no decision')
+      );
+    }
+    return decision;
+  }
+
+  async function runScenario(name) {
+    if (name === 'delivery') {
+      var deliverySession = await initProbe();
+      var socket = await connectProbe(deliverySession.sessionId);
+      var actionPromise = nextAction(socket);
+      var deliveryResult = await sendProbeEvent(deliverySession.sessionId, 'page_view');
+      var deliveryDecision = requireDecision(deliveryResult, 'cmp-20-off', 'ELIGIBLE');
+      var action = await actionPromise;
+      socket.close();
+      return {
+        title: 'End-to-end delivery passed',
+        detail: deliveryDecision.reasonCode + ' -> WebSocket action ' + action.deliveryId.slice(0, 8),
+      };
+    }
+
+    if (name === 'audience') {
+      var audienceSession = await initProbe('non-eligible');
+      var audienceResult = await sendProbeEvent(audienceSession.sessionId, 'page_view');
+      var audienceDecision = requireDecision(
+        audienceResult,
+        'cmp-20-off',
+        'AUDIENCE_MISMATCH'
+      );
+      return {
+        title: 'Audience isolation passed',
+        detail: audienceDecision.reason,
+      };
+    }
+
+    if (name === 'frequency') {
+      var frequencySession = await initProbe();
+      await sendProbeEvent(frequencySession.sessionId, 'page_view');
+      var repeated = await sendProbeEvent(frequencySession.sessionId, 'page_view');
+      var frequencyDecision = requireDecision(repeated, 'cmp-20-off', 'FREQUENCY_CAP');
+      return {
+        title: 'Frequency cap passed',
+        detail: frequencyDecision.reason,
+      };
+    }
+
+    if (name === 'threshold') {
+      var thresholdSession = await initProbe();
+      var below = await sendProbeEvent(thresholdSession.sessionId, 'add_to_cart', { price: 40 });
+      requireDecision(below, 'cmp-free-shipping', 'CONDITION_FAILED');
+      var above = await sendProbeEvent(thresholdSession.sessionId, 'add_to_cart', { price: 75 });
+      var thresholdDecision = requireDecision(above, 'cmp-free-shipping', 'ELIGIBLE');
+      return {
+        title: 'Behavioral threshold passed',
+        detail: '$40 rejected; cumulative $115 returned ' + thresholdDecision.reasonCode,
+      };
+    }
+
+    throw new Error('Unknown synthetic scenario');
+  }
+
+  var scenarioButtons = Array.from(document.querySelectorAll('[data-scenario]'));
+  scenarioButtons.forEach(function (button) {
+    button.addEventListener('click', function () {
+      var name = button.getAttribute('data-scenario');
+      var state = document.querySelector('[data-scenario-state="' + name + '"]');
+      var summary = document.querySelector('[data-probe-summary]');
+      var result = document.querySelector('[data-probe-result]');
+
+      scenarioButtons.forEach(function (item) { item.disabled = true; });
+      state.className = 'scenario-state is-running';
+      state.textContent = 'Running...';
+      summary.className = 'probe-status is-running';
+      summary.textContent = 'Checking';
+
+      runScenario(name)
+        .then(function (outcome) {
+          state.className = 'scenario-state is-passed';
+          state.textContent = 'Passed';
+          summary.className = 'probe-status is-passed';
+          summary.textContent = 'Last check passed';
+          result.className = 'probe-result is-passed';
+          result.hidden = false;
+          result.querySelector('[data-probe-title]').textContent = outcome.title;
+          result.querySelector('[data-probe-detail]').textContent = outcome.detail;
+          result.querySelector('[data-probe-time]').textContent =
+            new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          refreshPanels();
+        })
+        .catch(function (error) {
+          state.className = 'scenario-state is-failed';
+          state.textContent = 'Failed';
+          summary.className = 'probe-status is-failed';
+          summary.textContent = 'Attention needed';
+          result.className = 'probe-result is-failed';
+          result.hidden = false;
+          result.querySelector('[data-probe-title]').textContent = 'Check failed';
+          result.querySelector('[data-probe-detail]').textContent = error.message;
+          result.querySelector('[data-probe-time]').textContent =
+            new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        })
+        .finally(function () {
+          scenarioButtons.forEach(function (item) { item.disabled = false; });
+        });
+    });
+  });
+
+  var commandOverlay = document.querySelector('[data-command-overlay]');
+  var commandInput = document.querySelector('[data-command-input]');
+  var commandItems = Array.from(document.querySelectorAll('[data-command-item]'));
+  var commandEmpty = document.querySelector('[data-command-empty]');
+  var visibleCommandItems = commandItems.slice();
+  var activeCommandIndex = 0;
+
+  function setActiveCommand(index) {
+    visibleCommandItems.forEach(function (item) {
+      item.classList.remove('is-selected');
+    });
+    if (!visibleCommandItems.length) return;
+    activeCommandIndex = (index + visibleCommandItems.length) % visibleCommandItems.length;
+    visibleCommandItems[activeCommandIndex].classList.add('is-selected');
+  }
+
+  function openCommand() {
+    commandOverlay.hidden = false;
+    document.body.classList.add('command-open');
+    commandInput.value = '';
+    commandItems.forEach(function (item) { item.hidden = false; });
+    visibleCommandItems = commandItems.slice();
+    commandEmpty.hidden = true;
+    setActiveCommand(0);
+    setTimeout(function () { commandInput.focus(); }, 0);
+  }
+
+  function closeCommand() {
+    commandOverlay.hidden = true;
+    document.body.classList.remove('command-open');
+  }
+
+  document.querySelector('[data-command-open]').addEventListener('click', openCommand);
+  commandOverlay.addEventListener('click', function (event) {
+    if (event.target === commandOverlay) closeCommand();
+  });
+
+  commandItems.forEach(function (item, index) {
+    item.addEventListener('mouseenter', function () {
+      var visibleIndex = visibleCommandItems.indexOf(item);
+      if (visibleIndex >= 0) setActiveCommand(visibleIndex);
+    });
+    item.addEventListener('click', closeCommand);
+  });
+
+  commandInput.addEventListener('input', function () {
+    var query = commandInput.value.trim().toLowerCase();
+    visibleCommandItems = commandItems.filter(function (item) {
+      var matches = !query || item.getAttribute('data-search').indexOf(query) >= 0;
+      item.hidden = !matches;
+      return matches;
+    });
+    commandEmpty.hidden = visibleCommandItems.length !== 0;
+    setActiveCommand(0);
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      if (commandOverlay.hidden) openCommand();
+      else closeCommand();
+      return;
+    }
+    if (commandOverlay.hidden) return;
+    if (event.key === 'Escape') closeCommand();
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveCommand(activeCommandIndex + 1);
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveCommand(activeCommandIndex - 1);
+    }
+    if (event.key === 'Enter' && visibleCommandItems[activeCommandIndex]) {
+      visibleCommandItems[activeCommandIndex].click();
+    }
   });
 
   buildDiagram();
