@@ -1,0 +1,17 @@
+{
+  "name": "malachi-gen",
+  "version": "1.0.0",
+  "description": "מלאכי — מנהל את ההודעות והתגובות של QUAD באינסטגרם ובפייסבוק (Messenger/DM/תגובות), עם גישה חיה ל-API בפיקוח מלא: מנסח, מציג בדיוק מה יישלח, ושולח רק אחרי אישור מפורש לכל הודעה. טיקטוק בבדיקת-היתכנות בלבד עד שיימצא API רלוונטי. מופעל עם /malachi.",
+  "author": {
+    "name": "גון"
+  },
+  "keywords": [
+    "malachi",
+    "partner-agent",
+    "instagram",
+    "facebook-messenger",
+    "tiktok",
+    "social-dm",
+    "hebrew"
+  ]
+}
