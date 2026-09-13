@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QA Manager Home Assignment — Solitics Demo</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="qa-assignment.css" />
+</head>
+<body>
+  <div class="page">
+    <div class="brand-bar">
+      <a class="brand-mark" href="/" aria-label="Solitics home">SOLITICS</a>
+    </div>
+    <div class="wrap qa-wrap">
+      <div class="card qa-card">
+        <header class="qa-header">
+          <h1>QA Manager Home Assignment</h1>
+          <p class="sub">Solitics — Real-Time Campaign Delivery System · Submitted by Gon</p>
+          <div class="qa-meta">
+            <span class="qa-tag">5 Parts</span>
+            <span class="qa-tag">Playwright Suite</span>
+            <span class="qa-tag">AI-Assisted</span>
+          </div>
+        </header>
+
+        <nav class="qa-nav" id="qaNav">
+          <a href="#part1" class="qa-nav__item active">Part 1 — System &amp; QA Strategy</a>
+          <a href="#part2" class="qa-nav__item">Part 2 — AI Test Engineering</a>
+          <a href="#part3" class="qa-nav__item">Part 3 — Code Review</a>
+          <a href="#part4" class="qa-nav__item">Part 4 — QA Leadership</a>
+          <a href="#part5" class="qa-nav__item">Part 5 — Incident Investigation</a>
+          <a href="#ai-summary" class="qa-nav__item">AI Usage Summary</a>
+          <div class="qa-nav__links">
+            <a href="/">← Customer Website</a>
+            <a href="/dashboard.html">Flow Inspector →</a>
+          </div>
+        </nav>
+
+        <!-- ==================== PART 1 ==================== -->
+        <section id="part1" class="qa-section">
+          <h2 class="qa-section__title">Part 1 — System Understanding &amp; Risk-Based QA Strategy <span class="qa-weight">25%</span></h2>
+
+          <h3>1. Explain the System</h3>
+          <p>The system delivers a personalized popup to a customer's website visitor in real time, in response to their behaviour. It has four zones: the client browser, an API layer, a campaign engine, and three data stores.</p>
+
+          <h4>Component responsibilities</h4>
+          <ul class="qa-list">
+            <li><strong>Solitics SDK (client browser)</strong> — embedded on the customer's site. Calls SDK init once, opens a WebSocket, fires REST events for user actions (page_view, add_to_cart), and renders whatever popup instruction arrives on the socket. Reports popup_displayed / popup_closed back over REST.</li>
+            <li><strong>API Layer</strong> — the REST surface (api.js). Validates and routes SDK init, event ingestion, and campaign CRUD. Every event ack contains the engine's decisions.</li>
+            <li><strong>Event Ingestion</strong> — normalises incoming events, writes them to the Analytics store, and folds them into the user's profile (counters that drive segments).</li>
+            <li><strong>Profile &amp; Segmentation</strong> — derives segments from profile traits and counters (e.g. shoppers when cart value &gt; 0, high_intent unless eligible:false, vip from a tier trait).</li>
+            <li><strong>Campaign Manager / Audience &amp; Rules / Decision Engine</strong> — the brain. For every event, loads active campaigns, filters by trigger event, checks audience-segment overlap and extra field conditions, then applies frequency caps. Every rejection carries a machine-readable reason.</li>
+            <li><strong>Action Sender</strong> — on a positive decision, stamps a deliveryId and pushes the instruction down the user's WebSocket; if no socket is live yet, the instruction queues and flushes on connect.</li>
+            <li><strong>Real-time Server</strong> — owns the WebSocket registry; one socket per session.</li>
+            <li><strong>Data stores</strong> — Campaigns DB (definitions/status), User Profiles DB (traits, segments, delivery history), Analytics DB (raw event + delivery log).</li>
+          </ul>
+
+          <h4>Data flow</h4>
+          <ol class="qa-list qa-list--ordered">
+            <li>SDK init (REST) → profile identified, session created.</li>
+            <li>SDK opens the WebSocket for that session.</li>
+            <li>User acts → SDK POSTs the event → Ingestion writes analytics and updates the profile → Decision Engine evaluates every active campaign → on a match, Action Sender pushes the instruction over the socket → SDK renders one popup → SDK reports popup_displayed/closed back over REST.</li>
+          </ol>
+
+          <h4>Synchronous vs. asynchronous</h4>
+          <p><strong>Synchronous:</strong> SDK init; POST /api/v1/events, whose 202 ack includes the full decision list per campaign.</p>
+          <p><strong>Asynchronous:</strong> the popup push over the WebSocket is decoupled from the REST call that triggered it — the client learns "a campaign will fire" from the ack, but receives the render instruction on a separate channel, at a separate time, that can even queue if the socket isn't open yet.</p>
+
+          <h4>Three highest-risk failure points</h4>
+          <div class="qa-risk-grid">
+            <div class="qa-risk-card">
+              <div class="qa-risk-card__num">1</div>
+              <div class="qa-risk-card__title">REST/WebSocket race at connect time</div>
+              <p>A decision can fire before the socket finishes its handshake. The queue is in-memory and single-process — a dropped reconnect or server restart silently loses the delivery, with nothing in the REST response to reveal it.</p>
+            </div>
+            <div class="qa-risk-card">
+              <div class="qa-risk-card__num">2</div>
+              <div class="qa-risk-card__title">Shared mutable profile state under concurrency</div>
+              <p>Two events for the same user arriving close together read-modify-write the same in-memory profile; without atomic guarantees this can double-deliver past a cap or wrongly suppress a delivery.</p>
+            </div>
+            <div class="qa-risk-card">
+              <div class="qa-risk-card__num">3</div>
+              <div class="qa-risk-card__title">Delivery idempotency at the Action Sender → SDK boundary</div>
+              <p>Network retries or re-sent WS frames can duplicate the same instruction. Correctness depends entirely on the SDK de-duplicating client-side — if that logic regresses, the symptom is a doubled popup in front of the customer's own customers.</p>
+            </div>
+          </div>
+
+          <h3>2. Design the QA Strategy</h3>
+          <p>Ownership follows who is closest to the risk a layer catches, not an org chart.</p>
+
+          <table class="qa-table">
+            <thead>
+              <tr><th>Layer</th><th>Validates</th><th>Why it exists</th><th>Owner</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Unit</td><td>Individual functions (decision logic, segmentation rules, frequency caps)</td><td>Catches logic regressions at the cheapest cost</td><td>Developers</td></tr>
+              <tr><td>Integration</td><td>Module interactions (ingestion → profile → engine → action sender)</td><td>Verifies the wiring between components</td><td>Shared</td></tr>
+              <tr><td>API</td><td>REST contract — init, events, campaigns CRUD, validation errors</td><td>Pins the front door and every status code</td><td>QA</td></tr>
+              <tr><td>SDK / Browser</td><td>SDK init, WebSocket lifecycle, popup rendering, de-duplication</td><td>The only layer that can catch client-side regressions</td><td>QA</td></tr>
+              <tr><td>WebSocket</td><td>Queue-before-connect, delivery on connect, reconnection</td><td>No HTTP status code to catch silent failures</td><td>Shared</td></tr>
+              <tr><td>End-to-End</td><td>Full delivery cycle: user acts → popup appears → closes</td><td>Proves the whole chain works together</td><td>QA</td></tr>
+              <tr><td>Smoke</td><td>One delivery cycle, health endpoint, key campaigns active</td><td>Fastest signal that something is broken</td><td>QA / DevOps</td></tr>
+              <tr><td>Regression</td><td>Full suite including portable contract specs against staging</td><td>Catches regressions before they reach production</td><td>QA</td></tr>
+              <tr><td>Performance</td><td>Delivery latency under load, WS connection rates</td><td>Real-time delivery has latency SLAs</td><td>DevOps</td></tr>
+              <tr><td>Production Monitoring</td><td>Delivery rate, WS disconnect rate, decision-reason distribution</td><td>Earliest signal of incidents (Part 5 scenario)</td><td>DevOps / QA</td></tr>
+            </tbody>
+          </table>
+
+          <h4>Gates</h4>
+          <div class="qa-gates">
+            <div class="qa-gate">
+              <div class="qa-gate__label">Every Pull Request</div>
+              <p>Unit, integration, API tests, and the fast mock-only E2E specs (campaign-engine.spec.ts) — runs in ~1s.</p>
+            </div>
+            <div class="qa-gate">
+              <div class="qa-gate__label">Before every release</div>
+              <p>Full regression including the portable contract suite (popup-delivery.spec.ts) against staging, plus a performance smoke pass.</p>
+            </div>
+            <div class="qa-gate">
+              <div class="qa-gate__label">Continuously in production</div>
+              <p>Synthetic smoke checks (one delivery cycle every few minutes), dashboards/alerts on delivery rate, WS disconnect rate, and decision-engine skip reason distribution.</p>
+            </div>
+          </div>
+
+          <h3>3. Release Prioritization</h3>
+          <div class="qa-priority">
+            <div class="qa-priority__item">
+              <div class="qa-priority__rank">1</div>
+              <div>
+                <strong>Decision Engine correctness</strong> (audience match, conditions, frequency caps)
+                <p>Reduces the risk of the core business logic silently doing the wrong thing. A wrong decision is invisible anywhere except the customer's own screen.</p>
+              </div>
+            </div>
+            <div class="qa-priority__item">
+              <div class="qa-priority__rank">2</div>
+              <div>
+                <strong>WebSocket delivery path</strong> (queue-before-connect and de-duplication)
+                <p>Reduces the risk of a correct decision never reaching the user, or reaching them twice. No HTTP status code catches this silent failure.</p>
+              </div>
+            </div>
+            <div class="qa-priority__item">
+              <div class="qa-priority__rank">3</div>
+              <div>
+                <strong>API ingestion and validation</strong> (event acceptance, session handling)
+                <p>Reduces the risk of the front door breaking — a broken /api/v1/events endpoint takes down every campaign at once.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== PART 2 ==================== -->
+        <section id="part2" class="qa-section">
+          <h2 class="qa-section__title">Part 2 — AI-Assisted Test Engineering <span class="qa-weight">20%</span></h2>
+
+          <h3>1. Initial Prompt to an AI Coding Assistant</h3>
+          <pre class="code-block"><code>You are writing Playwright tests for popup delivery in a real-time campaign system.
+
+System context:
+- The SDK calls POST /api/v1/sdk/init, then opens a WebSocket at /ws?sessionId=...
+- User actions are sent via POST /api/v1/events; the 202 response already contains
+  the decision engine's per-campaign result, but the actual popup is pushed
+  ASYNCHRONOUSLY over the WebSocket, separately from that REST ack.
+- If the decision fires before the socket is open, the instruction queues and
+  flushes on connect -- so delivery timing is not fixed or instant.
+- The rendered popup must have data-testid="campaign-popup" and its close
+  control data-testid="popup-close". Do not rely on CSS classes or #ids.
+- Campaigns can be scoped to an audience segment (e.g. high_intent) and can be
+  frequency-capped per user/session, so a user who already received a popup in
+  this session must NOT be reused for a fresh delivery assertion.
+
+Write tests for:
+1. An eligible user (default profile) sees the popup with the exact copy
+   "Special Offer" and can close it.
+2. A non-eligible user (?testUser=non-eligible) sees no popup at all.
+3. The same campaign instruction re-sent twice over the socket must still
+   render exactly one popup (de-duplication).
+
+Requirements:
+- Use a fresh, unique userId per test so tests are safe to run in parallel.
+- Use only web-first, auto-retrying assertions (expect(locator).toBeVisible(),
+  .toHaveCount()) with an explicit timeout. Do NOT use waitForTimeout.
+- Assert on content, not just visibility, and assert non-eligible users get
+  toHaveCount(0) rather than assuming absence.
+- Keep tests independent: no shared global state, no fixed ordering.
+- Follow the existing repo style in tests/popup-delivery.spec.ts.</code></pre>
+
+          <h3>2. Review the AI Output</h3>
+          <h4>What likely caused the flakiness</h4>
+          <ul class="qa-list">
+            <li><strong>Hard-coded sleeps</strong> instead of state-based waits — waitForTimeout(n) is either too short under load (flaky failure) or wastes seconds on every run.</li>
+            <li><strong>Single, non-retrying isVisible() check</strong> racing the WebSocket push, instead of an auto-retrying expect(...).toBeVisible(timeout).</li>
+            <li><strong>Reused user/session identity</strong> across tests, so frequency caps from an earlier test suppress delivery in a later one — reproduces intermittently only under parallel execution.</li>
+            <li><strong>Assertions that check visibility but not content</strong>, so a stale/wrong popup still passes.</li>
+            <li><strong>Selectors resolved against markup the AI guessed</strong> at rather than markup the app actually emits.</li>
+          </ul>
+
+          <h4>Improving the prompt and iterating</h4>
+          <ul class="qa-list">
+            <li>Give the model the actual contract — paste real endpoint shapes, data-testid attributes, and timeout budgets rather than letting it infer them.</li>
+            <li>Name the failure mode explicitly: "delivery is asynchronous relative to the REST ack; do not assume it has happened by the time the REST call returns."</li>
+            <li>Run the generated suite with <code>--repeat-each=20</code> before trusting it — flakiness rarely shows on a single green run.</li>
+            <li>Feed the exact failure output back to the AI rather than re-describing the requirement.</li>
+            <li>Iterate in small diffs: fix one flakiness source, re-run 20x, only then move to the next.</li>
+          </ul>
+
+          <h4>Deciding a suite is production-ready</h4>
+          <ul class="qa-list qa-list--check">
+            <li>Zero failures across a repeated run (30-50x) both serially and with full parallelism.</li>
+            <li>No waitForTimeout left anywhere; every wait is tied to an observable state change.</li>
+            <li>Both the positive and negative path are asserted, not just the happy path.</li>
+            <li>The suite is order-independent — running one spec file alone gives the same result as running the whole suite.</li>
+            <li>A human who understands the delivery pipeline has read it and can explain why each wait and assertion exists.</li>
+          </ul>
+        </section>
+
+        <!-- ==================== PART 3 ==================== -->
+        <section id="part3" class="qa-section">
+          <h2 class="qa-section__title">Part 3 — Code Review <span class="qa-weight">20%</span></h2>
+
+          <h3>The submitted test</h3>
+          <pre class="code-block code-block--bad"><code>test('Popup appears', async ({ page }) => {
+    await page.goto('https://demo.site');
+    await page.waitForTimeout(5000);
+    const popup = page.locator('#popup');
+    expect(await popup.isVisible()).toBeTruthy();
+    await popup.locator('.close').click();
+});</code></pre>
+
+          <h3>1. Highest-risk issues, prioritized</h3>
+          <div class="qa-issues">
+            <div class="qa-issue"><span class="qa-issue__tag">Reliability</span> waitForTimeout(5000) is a fixed guess against an asynchronous, variable-latency delivery path. Fails under load, wastes 5s when delivery is instant.</div>
+            <div class="qa-issue"><span class="qa-issue__tag">Flakiness</span> isVisible() is read once; wrapping in expect(...).toBeTruthy() throws away Playwright's auto-retry entirely.</div>
+            <div class="qa-issue"><span class="qa-issue__tag">No trigger</span> The test goes straight to the URL and assumes a popup appears with no event fired and no way to know which user/session it is.</div>
+            <div class="qa-issue"><span class="qa-issue__tag">Missing assertions</span> Visibility is checked, but not popup content, so a broken campaign with wrong copy still passes.</div>
+            <div class="qa-issue"><span class="qa-issue__tag">Fragile selectors</span> #popup and .close are structural, not contract selectors; any markup refactor breaks the test.</div>
+            <div class="qa-issue"><span class="qa-issue__tag">No isolation</span> A shared URL with no unique user id means frequency caps or prior runs can suppress delivery.</div>
+            <div class="qa-issue"><span class="qa-issue__tag">No negative case</span> No verification the close actually closed it, and no non-eligible user test.</div>
+          </div>
+
+          <h3>2. Rewrite</h3>
+          <pre class="code-block code-block--good"><code>import { test, expect } from '@playwright/test';
+
+test.describe('Popup delivery', () => {
+  test('eligible user sees popup with correct content and can close it',
+    async ({ page }) => {
+      const userId = `qa-${test.info().testId}-${Date.now()}`;
+      await page.goto(`/?userId=${userId}`);
+
+      const popup = page.getByTestId('campaign-popup');
+
+      // Delivery is async (REST decision -> WS push); wait on state, not time.
+      await expect(popup).toBeVisible({ timeout: 10_000 });
+      await expect(popup).toContainText('Special Offer');
+      await expect(popup).toHaveCount(1); // catches accidental duplicate push
+
+      await page.getByTestId('popup-close').click();
+      await expect(popup).toBeHidden();
+    }
+  );
+
+  test('non-eligible user sees no popup', async ({ page }) => {
+    const userId = `qa-non-eligible-${Date.now()}`;
+    await page.goto(`/?userId=${userId}&testUser=non-eligible`);
+
+    await expect(page.getByTestId('campaign-popup'))
+      .toHaveCount(0, { timeout: 5_000 });
+  });
+});</code></pre>
+
+          <h3>3. Explanation of improvements</h3>
+          <ul class="qa-list qa-list--check">
+            <li>Hard sleep replaced with auto-retrying, state-based assertions matched to the real async boundary.</li>
+            <li>Structural selectors replaced with contract-stable test ids.</li>
+            <li>Added content assertion and toHaveCount(1) — "technically visible but wrong or duplicated" now fails.</li>
+            <li>Added the negative path — a leak to a non-eligible user is the most business-critical assertion.</li>
+            <li>Per-test unique identity removes dependence on execution order and makes the suite parallel-safe.</li>
+            <li>Close is verified to actually hide the popup, not just that the click didn't throw.</li>
+          </ul>
+
+          <h3>4. AI Validation</h3>
+          <ul class="qa-list qa-list--check">
+            <li>Run the rewritten suite repeatedly (--repeat-each=30+) both serially and fully parallel to confirm zero flakiness.</li>
+            <li>Deliberately break the feature (disable the campaign, rename the test id) and confirm the test fails — a test that can't fail is worse than no test.</li>
+            <li>Confirm every locator and query param the AI assumed actually exists in the current markup/API.</li>
+            <li>Have a human who owns this feature review the assumptions block before merging.</li>
+          </ul>
+        </section>
+
+        <!-- ==================== PART 4 ==================== -->
+        <section id="part4" class="qa-section">
+          <h2 class="qa-section__title">Part 4 — QA Leadership &amp; AI Strategy <span class="qa-weight">20%</span></h2>
+
+          <h3>AI-First QA Operating Model</h3>
+          <p>Team: 5 Backend, 4 Frontend, 2 QA, 1 DevOps. Tools: Claude, ChatGPT, Bitbucket.</p>
+
+          <table class="qa-table">
+            <thead>
+              <tr><th>Activity</th><th>AI Role</th><th>Human Gate</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Test ownership</td><td>Draft tests, suggest edge cases</td><td>QA owns the contract; devs own unit tests</td></tr>
+              <tr><td>Pull Request validation</td><td>Auto-generate review comments, flag missing assertions</td><td>Human approves merge</td></tr>
+              <tr><td>Automated test generation</td><td>Generate test drafts from ticket/PR context</td><td>Human reviews and validates</td></tr>
+              <tr><td>Automated test review</td><td>Flag waitForTimeout, weak assertions, missing isolation</td><td>Human decides if strictness change is acceptable</td></tr>
+              <tr><td>Smoke testing</td><td>Generate and maintain synthetic checks</td><td>QA owns alert thresholds</td></tr>
+              <tr><td>Regression testing</td><td>Identify gaps, suggest new cases from incidents</td><td>Human owns the regression suite</td></tr>
+              <tr><td>Release validation</td><td>Summarize test results, flag risks</td><td>Human makes go/no-go decision</td></tr>
+              <tr><td>Production monitoring</td><td>Anomaly detection, reason-distribution alerts</td><td>Human investigates and declares root cause</td></tr>
+              <tr><td>Failure analysis</td><td>Correlate logs, suggest hypotheses</td><td>Human confirms root cause and owns the postmortem</td></tr>
+            </tbody>
+          </table>
+
+          <h3>Human Judgment</h3>
+          <div class="qa-callout">
+            <h4>QA activities that always require meaningful human review</h4>
+            <ul class="qa-list qa-list--check">
+              <li>Interpreting acceptance criteria and deciding what NOT to test given limited time.</li>
+              <li>Any change to production alerting thresholds or on-call escalation rules.</li>
+              <li>Root-cause conclusions on a production incident.</li>
+              <li>The final release go/no-go decision.</li>
+              <li>Any test change that weakens or removes an existing assertion.</li>
+            </ul>
+          </div>
+
+          <div class="qa-callout qa-callout--warn">
+            <h4>Where AI creates the greatest engineering risk</h4>
+            <p>The main risk is <strong>false confidence</strong>: an AI-generated test that passes reliably but validates the wrong thing — a weak assertion, an over-mocked path, or a happy-path-only case dressed up as coverage. A subtler risk is AI "fixing" flakiness by loosening an assertion or adding a longer timeout instead of addressing the underlying race, trading a visible flaky test for an invisible false negative.</p>
+          </div>
+
+          <div class="qa-callout qa-callout--warn">
+            <h4>Decisions that should never be delegated completely</h4>
+            <ul class="qa-list">
+              <li>Whether a release is safe to ship.</li>
+              <li>The declared root cause of a production incident.</li>
+              <li>Whether a test's reduced strictness is an acceptable trade-off.</li>
+            </ul>
+          </div>
+
+          <div class="qa-callout">
+            <h4>Preventing AI-generated defects from reaching production</h4>
+            <ul class="qa-list qa-list--check">
+              <li>Require at least one human-authored acceptance test per feature, independent of whatever AI drafted.</li>
+              <li>Hold AI-authored code and tests to the same review bar as human-authored — no fast lane.</li>
+              <li>Tag AI-assisted PRs so they can be sampled and audited specifically.</li>
+              <li>Keep a human-reviewed regression/contract suite as the final gate regardless of what produced the change underneath it.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ==================== PART 5 ==================== -->
+        <section id="part5" class="qa-section">
+          <h2 class="qa-section__title">Part 5 — Production Incident Investigation <span class="qa-weight">15%</span></h2>
+
+          <div class="qa-incident">
+            <p>Yesterday afternoon, Marketing reported that <strong>popup delivery dropped from 98% to 67%</strong>. No deployments occurred, infrastructure is healthy, API latency is normal, no database alerts, only some customers affected.</p>
+          </div>
+
+          <h3>Investigation (10 ordered steps)</h3>
+          <div class="qa-steps">
+            <div class="qa-step"><div class="qa-step__num">1</div><div><strong>Segment the drop first</strong> — is it concentrated by campaign, audience segment, browser, or customer site? Query the Analytics DB / decision-reason breakdown before forming a root-cause theory.</div></div>
+            <div class="qa-step"><div class="qa-step__num">2</div><div><strong>Read the decision engine's own reasons</strong> — every non-delivery carries a machine-readable reason (audience miss, condition failed, frequency cap). Look for one reason spiking among affected customers.</div></div>
+            <div class="qa-step"><div class="qa-step__num">3</div><div><strong>Check WebSocket health metrics</strong> — connection and reconnect rates, per region/customer. A correct decision still requires a live socket to reach the user.</div></div>
+            <div class="qa-step"><div class="qa-step__num">4</div><div><strong>Check for a runtime campaign or audience-rule change</strong> — campaigns can be edited via the API without a deploy, so "no deployments" doesn't rule out a config change. Diff current campaign state against a known-good point.</div></div>
+            <div class="qa-step"><div class="qa-step__num">5</div><div><strong>Check client-side health on affected sites</strong> — SDK console errors, ad blockers, CSP changes, or a broken script include, especially if the affected set clusters by browser or customer site.</div></div>
+            <div class="qa-step"><div class="qa-step__num">6</div><div><strong>Check whether the SDK asset itself changed</strong> (CDN-served solitics-sdk.js) independent of a backend deployment.</div></div>
+            <div class="qa-step"><div class="qa-step__num">7</div><div><strong>Look at latency at the tail (p99)</strong>, not the average — "API latency is normal" may be an aggregate that hides degradation on a subset of high-traffic customers.</div></div>
+            <div class="qa-step"><div class="qa-step__num">8</div><div><strong>Plot the drop over time</strong> to see whether it is a step change or gradual decay, and correlate against any external event.</div></div>
+            <div class="qa-step"><div class="qa-step__num">9</div><div><strong>Reproduce against a known-affected segment/site</strong> with a synthetic test to confirm the leading hypothesis under controlled conditions.</div></div>
+            <div class="qa-step"><div class="qa-step__num">10</div><div><strong>Involve the right people</strong> — Marketing (confirm the figure is real), SDK/Frontend owners (client-side cause), Backend/Decision-Engine owners (rule or profile-state cause). Escalate immediately if evidence points to a shared decision-path bug affecting many customers.</div></div>
+          </div>
+
+          <h3>Validation &amp; Prevention</h3>
+          <h4>Confirm</h4>
+          <p>Reproduce the failure deterministically for the identified segment, and confirm the timeline of the suspected cause lines up with when the drop actually started.</p>
+          <h4>Validate the fix</h4>
+          <p>Apply the fix on staging or a canary and re-run the previously-failing scenario repeatedly. Only after the metric recovers in production — real delivery rate back near baseline — is the incident closed.</p>
+          <h4>Assess historical impact</h4>
+          <p>Query the Analytics DB for the affected window to count how many eligible users did not receive a delivery, broken down by campaign, to give Marketing a concrete business-impact number.</p>
+          <h4>Prevent recurrence</h4>
+          <ul class="qa-list qa-list--check">
+            <li>Add an alert on the specific failure signature found (e.g. a shift in the decision-reason distribution, or a guard on runtime campaign-rule edits).</li>
+            <li>Fold the reproduction case into the permanent regression and production-smoke suites so the same class of failure pages someone automatically before Marketing has to notice it.</li>
+          </ul>
+        </section>
+
+        <!-- ==================== AI SUMMARY ==================== -->
+        <section id="ai-summary" class="qa-section">
+          <h2 class="qa-section__title">AI Usage Summary</h2>
+          <table class="qa-table">
+            <thead>
+              <tr><th>Aspect</th><th>Detail</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>AI tool used</td><td>Claude (Claude Code), throughout this assignment</td></tr>
+              <tr><td>What it was used for</td><td>Reading the assignment and reference codebase, drafting the system explanation and QA strategy against actual component names and decision-engine behaviour, drafting the rewritten Playwright test, structuring the QA operating model and incident-investigation steps</td></tr>
+              <tr><td>Accepted as-is</td><td>Technical description of the system's data flow and failure points, verified directly against decision-engine.js, audience-rules.js and api.js</td></tr>
+              <tr><td>Modified</td><td>Prioritization calls in Parts 1.3 and 5 reflect own judgment of business risk, not just technical risk</td></tr>
+              <tr><td>How validated</td><td>Ran the 27-test Playwright suite against the real app (all passing) before writing the answers, so every claim about behaviour is checked against running code</td></tr>
+            </tbody>
+          </table>
+          <div class="qa-callout">
+            <p>AI was used as the assignment invites: to draft, to review the submitted test, and to generate the first pass of the Playwright suite. Every claim about behaviour in this document was then checked against the running application, and the suite was executed against it. Where the demo cuts a corner — in-memory state, a single process, a per-session frequency cap — it is called out as a corner rather than presented as a design.</p>
+          </div>
+        </section>
+
+        <div class="footer">
+          By continuing, you agree to the <a href="#">Terms</a> and <a href="#">Privacy Policy</a>.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="qa-assignment.js"></script>
+</body>
+</html>

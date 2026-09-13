@@ -1,0 +1,14 @@
+node_modules/
+test-results/
+
+# Build output — regenerate with `npx playwright test`, served at /test-report/
+playwright-report/
+
+PLUGIN/
+
+# Local Claude Code settings stay out, but the review agent is part of the
+# submission: it is how the demo was adversarially tested before presenting.
+.claude/*
+!.claude/agents/
+.claude/agents/*
+!.claude/agents/nadav-review.md

@@ -1,0 +1,20 @@
+{
+  "name": "popup-delivery-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Runnable demo of a Solitics-style real-time campaign delivery platform.",
+  "scripts": {
+    "start": "node server.js",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:api": "playwright test tests/campaign-engine.spec.ts",
+    "test:contract": "playwright test tests/popup-delivery.spec.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0"
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
+  }
+}
