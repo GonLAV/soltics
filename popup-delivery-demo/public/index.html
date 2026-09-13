@@ -29,7 +29,7 @@
       <button type="button" aria-label="Account">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
       </button>
-      <button class="cart-button" type="button" aria-label="Cart">
+      <button class="cart-button" type="button" aria-label="Open cart" aria-expanded="false" data-cart-open>
         <svg viewBox="0 0 24 24"><path d="M5 7h14l-1 13H6L5 7Zm3 0a4 4 0 0 1 8 0"/></svg>
         <span data-cart-count>0</span>
       </button>
@@ -95,6 +95,37 @@
     </section>
   </main>
 
+  <button class="drawer-backdrop" type="button" aria-label="Close cart" data-cart-backdrop></button>
+  <aside class="cart-drawer" aria-label="Shopping cart" aria-hidden="true" data-cart-drawer>
+    <header class="cart-drawer__header">
+      <div><span>Your bag</span><small data-cart-heading>0 items</small></div>
+      <button type="button" aria-label="Close cart" data-cart-close>
+        <svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </header>
+    <div class="cart-drawer__shipping">
+      <div><span data-drawer-shipping>Add $100 for complimentary shipping</span><b data-drawer-percent>0%</b></div>
+      <div class="drawer-progress"><i data-drawer-progress></i></div>
+    </div>
+    <div class="cart-drawer__items" data-cart-items>
+      <div class="empty-cart">
+        <span><svg viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6L5 8Zm3 0a4 4 0 0 1 8 0"/></svg></span>
+        <h2>Your bag is ready</h2>
+        <p>Add an essential and watch the campaign engine respond in real time.</p>
+        <button type="button" data-cart-shop>Explore the collection</button>
+      </div>
+    </div>
+    <footer class="cart-drawer__footer">
+      <div class="cart-summary-row"><span>Subtotal</span><strong data-cart-subtotal>$0</strong></div>
+      <p>Taxes and shipping calculated at checkout.</p>
+      <button class="checkout-button" type="button" data-checkout disabled>
+        Continue to checkout
+        <svg viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>
+      </button>
+      <div class="secure-note"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> Secure checkout</div>
+    </footer>
+  </aside>
+
   <aside class="demo-dock" aria-label="Demo controls">
     <button class="demo-dock__toggle" type="button" data-dock-toggle aria-expanded="false">
       <span class="pulse-icon"><i></i></span>
@@ -133,9 +164,10 @@
       { sku: 'sn-03', name: 'Daybreak Runner', color: 'Chalk / Gum', price: 120, art: 'shoe' },
     ];
 
-    var cartTotal = 0;
-    var cartCount = 0;
+    var cartItems = {};
     var container = document.getElementById('products');
+    var cartDrawer = document.querySelector('[data-cart-drawer]');
+    var cartButton = document.querySelector('[data-cart-open]');
 
     function productArt(type) {
       if (type === 'shoe') {
@@ -144,13 +176,98 @@
       return '<div class="product-art product-art--' + type + '"><span class="garment-body"></span><span class="garment-sleeve garment-sleeve--left"></span><span class="garment-sleeve garment-sleeve--right"></span><span class="garment-neck"></span><em>N</em></div>';
     }
 
+    function getCartState() {
+      return Object.keys(cartItems).reduce(function (state, sku) {
+        var item = cartItems[sku];
+        state.total += item.product.price * item.quantity;
+        state.count += item.quantity;
+        return state;
+      }, { total: 0, count: 0 });
+    }
+
+    function renderCartItems() {
+      var host = document.querySelector('[data-cart-items]');
+      var items = Object.keys(cartItems).map(function (sku) { return cartItems[sku]; });
+
+      if (!items.length) {
+        host.innerHTML =
+          '<div class="empty-cart">' +
+          '<span><svg viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6L5 8Zm3 0a4 4 0 0 1 8 0"/></svg></span>' +
+          '<h2>Your bag is ready</h2>' +
+          '<p>Add an essential and watch the campaign engine respond in real time.</p>' +
+          '<button type="button" data-cart-shop>Explore the collection</button></div>';
+        host.querySelector('[data-cart-shop]').addEventListener('click', closeCart);
+        return;
+      }
+
+      host.innerHTML = '';
+      items.forEach(function (item) {
+        var row = document.createElement('article');
+        row.className = 'drawer-item';
+        row.innerHTML =
+          '<div class="drawer-item__visual drawer-item__visual--' + item.product.art + '">' +
+          productArt(item.product.art) + '</div>' +
+          '<div class="drawer-item__copy"><div><h3>' + item.product.name + '</h3>' +
+          '<p>' + item.product.color + '</p></div>' +
+          '<div class="quantity-control">' +
+          '<button type="button" aria-label="Remove one ' + item.product.name + '" data-quantity-minus="' + item.product.sku + '">−</button>' +
+          '<span>' + item.quantity + '</span>' +
+          '<button type="button" aria-label="Add one ' + item.product.name + '" data-quantity-plus="' + item.product.sku + '">+</button></div></div>' +
+          '<strong>$' + (item.product.price * item.quantity) + '</strong>';
+        host.appendChild(row);
+      });
+
+      host.querySelectorAll('[data-quantity-minus]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var sku = button.getAttribute('data-quantity-minus');
+          cartItems[sku].quantity -= 1;
+          if (cartItems[sku].quantity === 0) delete cartItems[sku];
+          updateCart();
+        });
+      });
+      host.querySelectorAll('[data-quantity-plus]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          cartItems[button.getAttribute('data-quantity-plus')].quantity += 1;
+          updateCart();
+        });
+      });
+    }
+
     function updateCart() {
+      var state = getCartState();
+      var cartTotal = state.total;
+      var cartCount = state.count;
       document.querySelector('[data-testid="cart-total"]').textContent = '$' + cartTotal;
       document.querySelector('[data-cart-count]').textContent = cartCount;
       document.querySelector('[data-shipping-track]').style.width = Math.min(cartTotal, 100) + '%';
       document.querySelector('[data-shipping-message]').textContent =
         cartTotal >= 100 ? 'Free shipping unlocked' : 'Add $' + (100 - cartTotal) + ' to unlock free shipping';
       document.querySelector('.cart-progress').classList.toggle('is-unlocked', cartTotal >= 100);
+      document.querySelector('[data-cart-heading]').textContent = cartCount + (cartCount === 1 ? ' item' : ' items');
+      document.querySelector('[data-cart-subtotal]').textContent = '$' + cartTotal;
+      document.querySelector('[data-drawer-progress]').style.width = Math.min(cartTotal, 100) + '%';
+      document.querySelector('[data-drawer-percent]').textContent = Math.min(cartTotal, 100) + '%';
+      document.querySelector('[data-drawer-shipping]').textContent =
+        cartTotal >= 100 ? 'Complimentary shipping unlocked' : 'Add $' + (100 - cartTotal) + ' for complimentary shipping';
+      document.querySelector('[data-checkout]').disabled = cartCount === 0;
+      renderCartItems();
+      if (cartCount > 0) {
+        cartButton.classList.remove('is-bumped');
+        requestAnimationFrame(function () { cartButton.classList.add('is-bumped'); });
+      }
+    }
+
+    function openCart() {
+      document.body.classList.add('cart-open');
+      cartDrawer.setAttribute('aria-hidden', 'false');
+      cartButton.setAttribute('aria-expanded', 'true');
+      document.querySelector('[data-cart-close]').focus();
+    }
+
+    function closeCart() {
+      document.body.classList.remove('cart-open');
+      cartDrawer.setAttribute('aria-hidden', 'true');
+      cartButton.setAttribute('aria-expanded', 'false');
     }
 
     PRODUCTS.forEach(function (product, index) {
@@ -167,8 +284,8 @@
 
       card.querySelector('.quick-add').addEventListener('click', function () {
         var button = this;
-        cartTotal += product.price;
-        cartCount += 1;
+        if (!cartItems[product.sku]) cartItems[product.sku] = { product: product, quantity: 0 };
+        cartItems[product.sku].quantity += 1;
         updateCart();
         button.classList.add('is-added');
         button.innerHTML = 'Added <span>✓</span>';
@@ -191,6 +308,14 @@
       var dock = document.querySelector('.demo-dock');
       var isOpen = dock.classList.toggle('is-open');
       this.setAttribute('aria-expanded', String(isOpen));
+    });
+
+    cartButton.addEventListener('click', openCart);
+    document.querySelector('[data-cart-close]').addEventListener('click', closeCart);
+    document.querySelector('[data-cart-backdrop]').addEventListener('click', closeCart);
+    document.querySelector('[data-cart-shop]').addEventListener('click', closeCart);
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && document.body.classList.contains('cart-open')) closeCart();
     });
 
     document.addEventListener('solitics:ready', function (event) {

@@ -198,10 +198,10 @@
         '<i></i>' + escapeHtml(campaign.status) + '</span>';
 
       var toggle = document.createElement('button');
-      toggle.className = 'more-button';
+      toggle.className = 'campaign-action';
       toggle.type = 'button';
       toggle.setAttribute('aria-label', (campaign.status === 'active' ? 'Pause ' : 'Activate ') + campaign.name);
-      toggle.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>';
+      toggle.textContent = campaign.status === 'active' ? 'Pause' : 'Activate';
       toggle.addEventListener('click', function () {
         toggle.disabled = true;
         fetch('/api/v1/campaigns/' + campaign.id + '/status', {
@@ -273,6 +273,94 @@
 
   document.querySelector('.mobile-menu').addEventListener('click', function () {
     document.body.classList.toggle('sidebar-open');
+  });
+
+  document.querySelector('[data-sidebar-close]').addEventListener('click', function () {
+    document.body.classList.remove('sidebar-open');
+  });
+
+  document.querySelectorAll('.sidebar-link').forEach(function (link) {
+    link.addEventListener('click', function () {
+      document.body.classList.remove('sidebar-open');
+    });
+  });
+
+  var commandOverlay = document.querySelector('[data-command-overlay]');
+  var commandInput = document.querySelector('[data-command-input]');
+  var commandItems = Array.from(document.querySelectorAll('[data-command-item]'));
+  var commandEmpty = document.querySelector('[data-command-empty]');
+  var visibleCommandItems = commandItems.slice();
+  var activeCommandIndex = 0;
+
+  function setActiveCommand(index) {
+    visibleCommandItems.forEach(function (item) {
+      item.classList.remove('is-selected');
+    });
+    if (!visibleCommandItems.length) return;
+    activeCommandIndex = (index + visibleCommandItems.length) % visibleCommandItems.length;
+    visibleCommandItems[activeCommandIndex].classList.add('is-selected');
+  }
+
+  function openCommand() {
+    commandOverlay.hidden = false;
+    document.body.classList.add('command-open');
+    commandInput.value = '';
+    commandItems.forEach(function (item) { item.hidden = false; });
+    visibleCommandItems = commandItems.slice();
+    commandEmpty.hidden = true;
+    setActiveCommand(0);
+    setTimeout(function () { commandInput.focus(); }, 0);
+  }
+
+  function closeCommand() {
+    commandOverlay.hidden = true;
+    document.body.classList.remove('command-open');
+  }
+
+  document.querySelector('[data-command-open]').addEventListener('click', openCommand);
+  commandOverlay.addEventListener('click', function (event) {
+    if (event.target === commandOverlay) closeCommand();
+  });
+
+  commandItems.forEach(function (item, index) {
+    item.addEventListener('mouseenter', function () {
+      var visibleIndex = visibleCommandItems.indexOf(item);
+      if (visibleIndex >= 0) setActiveCommand(visibleIndex);
+    });
+    item.addEventListener('click', closeCommand);
+  });
+
+  commandInput.addEventListener('input', function () {
+    var query = commandInput.value.trim().toLowerCase();
+    visibleCommandItems = commandItems.filter(function (item) {
+      var matches = !query || item.getAttribute('data-search').indexOf(query) >= 0;
+      item.hidden = !matches;
+      return matches;
+    });
+    commandEmpty.hidden = visibleCommandItems.length !== 0;
+    setActiveCommand(0);
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      if (commandOverlay.hidden) openCommand();
+      else closeCommand();
+      return;
+    }
+    if (commandOverlay.hidden) return;
+    if (event.key === 'Escape') closeCommand();
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveCommand(activeCommandIndex + 1);
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveCommand(activeCommandIndex - 1);
+    }
+    if (event.key === 'Enter' && visibleCommandItems[activeCommandIndex]) {
+      visibleCommandItems[activeCommandIndex].click();
+    }
   });
 
   buildDiagram();
